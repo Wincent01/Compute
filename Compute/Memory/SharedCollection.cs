@@ -1,13 +1,12 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 
 namespace Compute.Memory
 {
-    public class SharedCollection<T> : IEnumerable<T> where T : struct
+    public class SharedCollection<T> : IEnumerable<T>, IDisposable where T : unmanaged
     {
         public SharedMemoryStream Stream { get; }
 
@@ -15,22 +14,13 @@ namespace Compute.Memory
 
         public int Length => (int) (Stream.Length / Marshal.SizeOf<T>());
         
-        public SharedCollection(Context context, IEnumerable<T> enumerable)
+        public SharedCollection(Context context, Span<T> span)
         {
-            var array = enumerable.ToArray();
-
-            var size = (uint) (Marshal.SizeOf<T>() * array.Length);
-            
-            using var stream = new MemoryStream();
-
-            foreach (var element in array)
-            {
-                stream.Write(element);
-            }
+            var size = (uint) (Marshal.SizeOf<T>() * span.Length);
             
             Stream = new SharedMemoryStream(context, size);
 
-            Stream.Write(stream.ToArray());
+            Stream.Write(span);
         }
 
         public SharedCollection(Context context, int length)
@@ -40,50 +30,24 @@ namespace Compute.Memory
             Stream = new SharedMemoryStream(context, size);
         }
 
-        public IEnumerable<T> ReadCollection()
+        public Span<T> ReadCollection()
         {
             Stream.Position = 0;
 
-            var content = new byte[Stream.Length];
-
-            Stream.Read(new Span<byte>(content));
-
-            using var stream = new MemoryStream(content);
-
-            for (var i = 0; i < Length; i++)
-            {
-                yield return stream.Read<T>();
-            }
+            return Stream.Read<T>(Length);
         }
 
         public void WriteCollection(IEnumerable<T> enumerable)
         {
-            using var stream = new MemoryStream();
-
-            foreach (var element in enumerable)
-            {
-                stream.Write(element);
-            }
-
             Stream.Position = default;
 
-            Stream.Write(stream.ToArray());
+            var array = enumerable.ToArray();
+
+            Stream.Write(new Span<T>(array));
         }
 
-        public IEnumerator<T> GetEnumerator() => GetEnumerator(false);
-        
-        public IEnumerator<T> GetEnumerator(bool active)
+        public IEnumerator<T> GetEnumerator()
         {
-            if (active)
-            {
-                foreach (var element in ReadCollection())
-                {
-                    yield return element;
-                }
-                
-                yield break;
-            }
-            
             Stream.Position = default;
             
             for (var i = 0; i < Length; i++)
@@ -94,7 +58,7 @@ namespace Compute.Memory
 
         IEnumerator IEnumerable.GetEnumerator()
         {
-            return GetEnumerator(false);
+            return GetEnumerator();
         }
 
         public T this[int index]
@@ -111,6 +75,11 @@ namespace Compute.Memory
 
                 Stream.Write(value);
             }
+        }
+
+        public void Dispose()
+        {
+            Stream?.Dispose();
         }
     }
 }

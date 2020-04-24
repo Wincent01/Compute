@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 
 namespace Compute.Memory
 {
-    public class SharedValue<T> where T : struct
+    public class SharedValue<T> : IDisposable where T : struct
     {
         public SharedMemoryStream Stream { get; }
 
@@ -39,6 +39,11 @@ namespace Compute.Memory
 
                 Stream.Write(value);
             }
+        }
+
+        public void Dispose()
+        {
+            Stream?.Dispose();
         }
     }
 }

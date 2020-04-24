@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using Silk.NET.OpenCL;
 
 namespace Compute.Memory
@@ -31,9 +32,18 @@ namespace Compute.Memory
         {
         }
 
+        public Span<T> Read<T>(int count) where T : unmanaged
+        {
+            var result = Context.ReadBuffer<T>(Handle, (uint) count, (uint) Position);
+            
+            Position += Marshal.SizeOf<T>() * count;
+
+            return result;
+        }
+
         public override int Read(byte[] buffer, int offset, int count)
         {
-            var result = Context.ReadBuffer(Handle, (uint) count, (uint) Position);
+            var result = Context.ReadBuffer<byte>(Handle, (uint) count, (uint) Position).ToArray();
 
             result.CopyTo(buffer, offset);
 
@@ -67,11 +77,18 @@ namespace Compute.Memory
             throw new NotSupportedException();
         }
 
+        public void Write<T>(Span<T> buffer) where T : unmanaged
+        {
+            Context.WriteBuffer(Handle, buffer, (uint) Position);
+
+            Position += Marshal.SizeOf<T>() * buffer.Length;
+        }
+
         public override void Write(byte[] buffer, int offset, int count)
         {
             Array.Resize(ref buffer, count);
             
-            Context.WriteBuffer(Handle, buffer, (uint) Position);
+            Context.WriteBuffer(Handle, new Span<byte>(buffer), (uint) Position);
 
             Position += count;
         }

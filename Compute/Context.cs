@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 using Silk.NET.OpenCL;
 
 namespace Compute
@@ -56,34 +58,34 @@ namespace Compute
             OpenBuffers.Remove(buffer);
         }
 
-        public void WriteBuffer(IntPtr buffer, byte[] data, uint offset)
+        public void WriteBuffer<T>(IntPtr buffer, Span<T> data, uint offset) where T : unmanaged
         {
             var error = (CLEnum) Bindings.OpenCl.EnqueueWriteBuffer(Queue,
                 buffer,
                 true,
                 (UIntPtr) offset,
-                (UIntPtr) data.Length,
-                new Span<byte>(data),
+                (UIntPtr) (data.Length * Marshal.SizeOf<T>()),
+                data,
                 0,
                 Span<IntPtr>.Empty,
                 Span<IntPtr>.Empty
             );
-
+            
             if (error != CLEnum.Success)
             {
                 throw new Exception("Failed to write device memory!");
             }
         }
 
-        public byte[] ReadBuffer(IntPtr buffer, uint size, uint offset)
+        public Span<T> ReadBuffer<T>(IntPtr buffer, uint size, uint offset) where T : unmanaged
         {
-            var result = new byte[size];
+            var result = new T[size];
 
             var error = (CLEnum) Bindings.OpenCl.EnqueueReadBuffer(Queue, buffer,
                 true,
                 (UIntPtr) offset,
-                (UIntPtr) size,
-                new Span<byte>(result),
+                (UIntPtr) (size * Marshal.SizeOf<T>()),
+                new Span<T>(result),
                 0,
                 Span<IntPtr>.Empty,
                 Span<IntPtr>.Empty
