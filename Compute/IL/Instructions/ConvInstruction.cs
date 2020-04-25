@@ -5,7 +5,7 @@ namespace Compute.IL.Instructions
 {
     [Instruction(Code.Conv_R4,
         Code.Conv_U, Code.Conv_I8,
-        Code.Conv_U8)
+        Code.Conv_U8, Code.Conv_R_Un)
     ]
     public class ConvInstruction : InstructionBase
     {
@@ -23,6 +23,9 @@ namespace Compute.IL.Instructions
                     Stack.Push($"({typeof(ulong).CLString(Source)}) ({Stack.Pop()})");
                     break;
                 case Code.Conv_R4:
+                    Stack.Push($"({typeof(float).CLString(Source)}) ({Stack.Pop()})");
+                    break;
+                case Code.Conv_R_Un:
                     Stack.Push($"({typeof(float).CLString(Source)}) ({Stack.Pop()})");
                     break;
             }

@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Numerics;
-using System.Reflection;
+using System.Runtime.InteropServices;
 using Compute.IL;
 using Compute.Memory;
+using Silk.NET.OpenCL;
 
 namespace Compute.Samples
 {
@@ -13,34 +15,50 @@ namespace Compute.Samples
         public static Matrix4x4 Multiply(Matrix4x4 value1, Matrix4x4 value2)
         {
             Matrix4x4 m;
-            
+
             // First row
-            m.M11 = value1.M11 * value2.M11 + value1.M12 * value2.M21 + value1.M13 * value2.M31 + value1.M14 * value2.M41;
-            m.M12 = value1.M11 * value2.M12 + value1.M12 * value2.M22 + value1.M13 * value2.M32 + value1.M14 * value2.M42;
-            m.M13 = value1.M11 * value2.M13 + value1.M12 * value2.M23 + value1.M13 * value2.M33 + value1.M14 * value2.M43;
-            m.M14 = value1.M11 * value2.M14 + value1.M12 * value2.M24 + value1.M13 * value2.M34 + value1.M14 * value2.M44;
+            m.M11 = value1.M11 * value2.M11 + value1.M12 * value2.M21 + value1.M13 * value2.M31 +
+                    value1.M14 * value2.M41;
+            m.M12 = value1.M11 * value2.M12 + value1.M12 * value2.M22 + value1.M13 * value2.M32 +
+                    value1.M14 * value2.M42;
+            m.M13 = value1.M11 * value2.M13 + value1.M12 * value2.M23 + value1.M13 * value2.M33 +
+                    value1.M14 * value2.M43;
+            m.M14 = value1.M11 * value2.M14 + value1.M12 * value2.M24 + value1.M13 * value2.M34 +
+                    value1.M14 * value2.M44;
 
             // Second row
-            m.M21 = value1.M21 * value2.M11 + value1.M22 * value2.M21 + value1.M23 * value2.M31 + value1.M24 * value2.M41;
-            m.M22 = value1.M21 * value2.M12 + value1.M22 * value2.M22 + value1.M23 * value2.M32 + value1.M24 * value2.M42;
-            m.M23 = value1.M21 * value2.M13 + value1.M22 * value2.M23 + value1.M23 * value2.M33 + value1.M24 * value2.M43;
-            m.M24 = value1.M21 * value2.M14 + value1.M22 * value2.M24 + value1.M23 * value2.M34 + value1.M24 * value2.M44;
+            m.M21 = value1.M21 * value2.M11 + value1.M22 * value2.M21 + value1.M23 * value2.M31 +
+                    value1.M24 * value2.M41;
+            m.M22 = value1.M21 * value2.M12 + value1.M22 * value2.M22 + value1.M23 * value2.M32 +
+                    value1.M24 * value2.M42;
+            m.M23 = value1.M21 * value2.M13 + value1.M22 * value2.M23 + value1.M23 * value2.M33 +
+                    value1.M24 * value2.M43;
+            m.M24 = value1.M21 * value2.M14 + value1.M22 * value2.M24 + value1.M23 * value2.M34 +
+                    value1.M24 * value2.M44;
 
             // Third row
-            m.M31 = value1.M31 * value2.M11 + value1.M32 * value2.M21 + value1.M33 * value2.M31 + value1.M34 * value2.M41;
-            m.M32 = value1.M31 * value2.M12 + value1.M32 * value2.M22 + value1.M33 * value2.M32 + value1.M34 * value2.M42;
-            m.M33 = value1.M31 * value2.M13 + value1.M32 * value2.M23 + value1.M33 * value2.M33 + value1.M34 * value2.M43;
-            m.M34 = value1.M31 * value2.M14 + value1.M32 * value2.M24 + value1.M33 * value2.M34 + value1.M34 * value2.M44;
+            m.M31 = value1.M31 * value2.M11 + value1.M32 * value2.M21 + value1.M33 * value2.M31 +
+                    value1.M34 * value2.M41;
+            m.M32 = value1.M31 * value2.M12 + value1.M32 * value2.M22 + value1.M33 * value2.M32 +
+                    value1.M34 * value2.M42;
+            m.M33 = value1.M31 * value2.M13 + value1.M32 * value2.M23 + value1.M33 * value2.M33 +
+                    value1.M34 * value2.M43;
+            m.M34 = value1.M31 * value2.M14 + value1.M32 * value2.M24 + value1.M33 * value2.M34 +
+                    value1.M34 * value2.M44;
 
             // Fourth row
-            m.M41 = value1.M41 * value2.M11 + value1.M42 * value2.M21 + value1.M43 * value2.M31 + value1.M44 * value2.M41;
-            m.M42 = value1.M41 * value2.M12 + value1.M42 * value2.M22 + value1.M43 * value2.M32 + value1.M44 * value2.M42;
-            m.M43 = value1.M41 * value2.M13 + value1.M42 * value2.M23 + value1.M43 * value2.M33 + value1.M44 * value2.M43;
-            m.M44 = value1.M41 * value2.M14 + value1.M42 * value2.M24 + value1.M43 * value2.M34 + value1.M44 * value2.M44;
+            m.M41 = value1.M41 * value2.M11 + value1.M42 * value2.M21 + value1.M43 * value2.M31 +
+                    value1.M44 * value2.M41;
+            m.M42 = value1.M41 * value2.M12 + value1.M42 * value2.M22 + value1.M43 * value2.M32 +
+                    value1.M44 * value2.M42;
+            m.M43 = value1.M41 * value2.M13 + value1.M42 * value2.M23 + value1.M43 * value2.M33 +
+                    value1.M44 * value2.M43;
+            m.M44 = value1.M41 * value2.M14 + value1.M42 * value2.M24 + value1.M43 * value2.M34 +
+                    value1.M44 * value2.M44;
 
             return m;
         }
-        
+
         [Kernel]
         public static void ExampleKernel([Global] Matrix4x4[] input, [Global] Matrix4x4[] output, [Const] uint count)
         {
@@ -49,8 +67,13 @@ namespace Compute.Samples
             if (id >= count) return;
 
             var matrix = input[id];
-            
-            output[id] = Multiply(matrix, matrix);
+
+            for (var i = 0; i < 100; i++)
+            {
+                matrix = Multiply(matrix, matrix);
+            }
+
+            output[id] = matrix;
         }
 
         private static void PrintAcceleratorDetails(Accelerator accelerator)
@@ -72,42 +95,24 @@ namespace Compute.Samples
 
             PrintAcceleratorDetails(accelerator);
 
-            var context = accelerator.CreateContext();
-
-            var method = typeof(Program).GetMethod(nameof(ExampleKernel), BindingFlags.Static | BindingFlags.Public);
+            using var context = accelerator.CreateContext();
 
             Console.WriteLine("Running...");
 
             var watch = new Stopwatch();
             watch.Start();
 
-            var ilProgram = new ILProgram(Assembly.GetExecutingAssembly());
+            var ilProgram = new ILProgram(context);
 
-            var ilKernel = ilProgram.Compile(method);
+            var ilKernel = ilProgram.Compile<Action<Matrix4x4[], Matrix4x4[], uint>>(ExampleKernel);
 
             Console.WriteLine($"Compile kernel: {watch.ElapsedMilliseconds}ms");
 
-            var source = ilProgram.CompleteSource(ilKernel);
+            var source = ilProgram.CompleteSource(ilProgram.Kernels.First());
 
             File.WriteAllText("kernel.cl", source); // Save source for debugging
 
-            watch.Restart();
-
-            var program = DeviceProgram.FromSource(context, source);
-
-            program.Build();
-
-            Console.WriteLine($"Build program: {watch.ElapsedMilliseconds}ms");
-
-            watch.Restart();
-
-            var kernel = program.BuildKernel(nameof(ExampleKernel));
-
-            Console.WriteLine($"Build kernel: {watch.ElapsedMilliseconds}ms");
-
-            watch.Stop();
-
-            const int size = 1024 * 1000;
+            const int size = 1024 * 100;
             const int rounds = 100;
 
             var random = new Random();
@@ -115,11 +120,17 @@ namespace Compute.Samples
             var totalFail = 0L;
             var totalGpu = 0L;
             var totalCpu = 0L;
-            
+
+            var results = new Matrix4x4[size];
+
+            var data = new Matrix4x4[size];
+
+            using var input = new SharedCollection<Matrix4x4>(context, data, true);
+
+            using var output = new SharedCollection<Matrix4x4>(context, results, true);
+
             for (var j = 0; j < rounds; j++)
             {
-                var data = new Matrix4x4[size];
-
                 for (var i = 0; i < size; i++)
                 {
                     data[i].M11 = random.Next(1, 1000);
@@ -140,44 +151,29 @@ namespace Compute.Samples
                     data[i].M44 = random.Next(1, 1000);
                 }
 
-                using var input = new SharedCollection<Matrix4x4>(context, data);
-
-                using var output = new SharedCollection<Matrix4x4>(context, size);
-
-                using var sizeInput = new SharedValue<uint>(context, size);
-
                 watch.Restart();
-
-                kernel.Invoke(size, new KernelArgument
-                {
-                    Value = input.UPtr,
-                    Size = 8
-                }, new KernelArgument
-                {
-                    Value = output.UPtr,
-                    Size = 8
-                }, new KernelArgument
-                {
-                    Value = sizeInput.UPtr,
-                    Size = 4
-                });
+                
+                ilKernel.Invoke(size, input.UPtr, output.UPtr, (UIntPtr) size);
 
                 var gpu = watch.ElapsedMilliseconds;
 
                 watch.Restart();
-
+                
                 for (var i = 0; i < size; i++)
                 {
                     var value = data[i];
 
-                    data[i] = value * value; // Simplified operation
+                    for (var k = 0; k < 100; k++)
+                    {
+                        value = Multiply(value, value);
+                    }
+
+                    data[i] = value;
                 }
 
                 var cpu = watch.ElapsedMilliseconds;
 
                 watch.Stop();
-
-                var results = output.ReadCollection();
 
                 var failed = 0;
 
@@ -199,13 +195,13 @@ namespace Compute.Samples
                 }
 
                 Console.WriteLine(
-                    $"[{j:000}/{rounds:000}] Kernel succeeded with {Percent(size, failed)} operations at {Percent(cpu, gpu, true)} IL speed!"
+                    $"[{j + 1:0000}/{rounds:0000}] Kernel succeeded with {Percent(size, failed)} operations at {Percent(cpu, gpu, true)} IL speed!"
                 );
 
                 totalFail += failed;
                 totalCpu += cpu;
                 totalGpu += gpu;
-                
+
                 Console.ResetColor();
             }
 

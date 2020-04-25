@@ -119,7 +119,14 @@ namespace Compute
             {
                 throw new Exception("Failed to create command queue!");
             }
+            
+            var retain = (CLEnum) Bindings.OpenCl.RetainCommandQueue(queue);
 
+            if (retain != CLEnum.Success)
+            {
+                throw new Exception("Failed to retain command queue!");
+            }
+            
             var context = new Context(this, result, queue);
 
             OpenContexts.Remove(context);

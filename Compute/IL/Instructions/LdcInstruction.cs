@@ -9,7 +9,8 @@ namespace Compute.IL.Instructions
         Code.Ldc_I4_5, Code.Ldc_I4_6,
         Code.Ldc_I4_7, Code.Ldc_I4_8,
         Code.Ldc_I4_M1, Code.Ldc_R4,
-        Code.Ldc_R8, Code.Ldc_I4_4)
+        Code.Ldc_R8, Code.Ldc_I4_4,
+        Code.Ldc_I4_S)
     ]
     public class LdcInstruction : InstructionBase
     {
@@ -19,6 +20,9 @@ namespace Compute.IL.Instructions
             {
                 case Code.Ldc_I4:
                     Stack.Push((int) Instruction.Operand);
+                    break;
+                case Code.Ldc_I4_S:
+                    Stack.Push((sbyte) Instruction.Operand);
                     break;
                 case Code.Ldc_I4_0:
                     Stack.Push(0);

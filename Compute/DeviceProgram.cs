@@ -46,7 +46,7 @@ namespace Compute
             return new DeviceProgram(context, result);
         }
 
-        public unsafe void Build()
+        public void Build()
         {
             var error = (CLEnum) Bindings.OpenCl.BuildProgram(Handle,
                 0,
@@ -107,7 +107,7 @@ namespace Compute
 
         private void ReleaseUnmanagedResources()
         {
-            foreach (var kernel in Kernels)
+            foreach (var kernel in Kernels.ToArray())
             {
                 kernel.Dispose();
             }

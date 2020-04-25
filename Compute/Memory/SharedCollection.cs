@@ -14,20 +14,34 @@ namespace Compute.Memory
 
         public int Length => (int) (Stream.Length / Marshal.SizeOf<T>());
         
-        public SharedCollection(Context context, Span<T> span)
+        public SharedCollection(Context context, Span<T> span, bool host = false)
         {
-            var size = (uint) (Marshal.SizeOf<T>() * span.Length);
-            
-            Stream = new SharedMemoryStream(context, size);
+            if (host)
+            {
+                Stream = SharedMemoryStream.FromHost(context, span);
+            }
+            else
+            {
+                var size = (uint) (Marshal.SizeOf<T>() * span.Length);
 
-            Stream.Write(span);
+                Stream = new SharedMemoryStream(context, size);
+
+                Stream.Write(span);
+            }
         }
 
-        public SharedCollection(Context context, int length)
+        public SharedCollection(Context context, int length, bool host = false)
         {
             var size = (uint) (Marshal.SizeOf<T>() * length);
 
-            Stream = new SharedMemoryStream(context, size);
+            if (host)
+            {
+                Stream = SharedMemoryStream.AllocHost(context, size);
+            }
+            else
+            {
+                Stream = new SharedMemoryStream(context, size);
+            }
         }
 
         public Span<T> ReadCollection()

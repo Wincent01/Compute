@@ -95,8 +95,13 @@ namespace Compute
             {
                 throw new Exception("Failed to invoke kernel!");
             }
+            
+            error = (CLEnum) Bindings.OpenCl.Finish(Program.Context.Queue);
 
-            Bindings.OpenCl.Finish(Program.Context.Queue);
+            if (error != CLEnum.Success)
+            {
+                throw new Exception($"Failed to finish kernel call!");
+            }
         }
 
         ~Kernel()

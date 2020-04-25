@@ -13,6 +13,8 @@ namespace Compute.Memory
 
         public UIntPtr UPtr => (UIntPtr) Handle.ToInt64();
 
+        public bool Host { get; }
+        
         public override bool CanRead => true;
         public override bool CanSeek => true;
         public override bool CanWrite => true;
@@ -26,6 +28,31 @@ namespace Compute.Memory
             Handle = Context.CreateBuffer(size, CLEnum.MemReadWrite);
 
             Length = size;
+        }
+
+        public SharedMemoryStream(Context context, uint size, IntPtr handle, bool host)
+        {
+            Context = context;
+
+            Handle = handle;
+
+            Length = size;
+
+            Host = host;
+        }
+
+        public static SharedMemoryStream FromHost<T>(Context context, Span<T> span) where T : unmanaged
+        {
+            var handle = context.CreateBufferHost(span);
+
+            return new SharedMemoryStream(context, (uint) span.Length, handle, true);
+        }
+
+        public static SharedMemoryStream AllocHost(Context context, uint size)
+        {
+            var handle = context.AllocBufferHost(size);
+
+            return new SharedMemoryStream(context, size, handle, true);
         }
 
         public override void Flush()
