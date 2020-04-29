@@ -3,7 +3,7 @@ using Mono.Cecil.Cil;
 
 namespace Compute.IL.Instructions
 {
-    [Instruction(Code.Ldelem_R4, Code.Ldelem_Any, Code.Ldelem_U4)]
+    [Instruction(Code.Ldelem_R4, Code.Ldelem_Any, Code.Ldelem_U4, Code.Ldelem_I4)]
     public class LdelemInstruction : InstructionBase
     {
         public override string Compile()
@@ -21,6 +21,9 @@ namespace Compute.IL.Instructions
                     break;
                 case Code.Ldelem_U4:
                     Stack.Push($"(({typeof(uint).CLString(Source)}) {array}[{index}])");
+                    break;
+                case Code.Ldelem_I4:
+                    Stack.Push($"(({typeof(int).CLString(Source)}) {array}[{index}])");
                     break;
             }
 

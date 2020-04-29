@@ -64,14 +64,16 @@ namespace Compute.IL.Compiler
             var stack = new Stack<object>();
             
             var variables = new Dictionary<int, object>();
+
+            var prefix = new List<string>();
             
             var builder = new StringBuilder();
 
-            builder.AppendLine(GenerateVariables(body, source));
+            var declare = GenerateVariables(body, source);
 
             foreach (var instruction in body.Instructions)
             {
-                builder.AppendLine($"IL{instruction.Offset}:");
+                builder.AppendLine($"IL{instruction.Offset}: // {instruction}");
                 
                 if (!codes.TryGetValue(instruction.OpCode.Code, out var type))
                 {
@@ -86,15 +88,36 @@ namespace Compute.IL.Compiler
                 instance.Stack = stack;
                 instance.Variables = variables;
                 instance.Source = source;
+                instance.Prefix = prefix;
 
-                var cl = instance.Compile();
+                try
+                {
+                    var cl = instance.Compile();
 
-                if (string.IsNullOrWhiteSpace(cl)) continue;
+                    if (string.IsNullOrWhiteSpace(cl)) continue;
 
-                builder.AppendLine($"\t{cl};");
+                    builder.AppendLine($"\t{cl};");
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(builder.ToString());
+                    Console.WriteLine(e);
+                    throw;
+                }
             }
 
-            return builder.ToString();
+            var final = new StringBuilder();
+
+            final.AppendLine($"{declare}");
+
+            foreach (var temp in prefix)
+            {
+                final.AppendLine($"\t{temp};");
+            }
+
+            final.AppendLine($"{builder}");
+
+            return final.ToString();
         }
     }
 }

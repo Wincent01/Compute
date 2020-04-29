@@ -1,4 +1,5 @@
 using System;
+using System.Numerics;
 using System.Reflection;
 using System.Text;
 
@@ -58,7 +59,7 @@ namespace Compute.IL.Compiler
             return "";
         }
         
-        public static string GenerateType(Type type, ILCode code, bool signature = false)
+        public static string GenerateType(Type type, ILCode code, bool structure = false)
         {
             var builder = new StringBuilder();
             
@@ -68,7 +69,7 @@ namespace Compute.IL.Compiler
             {
                 var memberType = type.GetElementType();
 
-                builder.Append($"{GenerateType(memberType, code, signature)}*");
+                builder.Append($"{GenerateType(memberType, code, structure)}*");
 
                 return builder.ToString();
             }
@@ -82,6 +83,11 @@ namespace Compute.IL.Compiler
             {
                 return "void";
             }
+
+            if (type == typeof(string))
+            {
+                return "char*";
+            }
             
             if (!type.IsValueType)
             {
@@ -90,9 +96,9 @@ namespace Compute.IL.Compiler
             
             if (code != default)
             {
-                code.Linked.Add(code.Program.Register(type));
+                code.Link(type);
                 
-                return $"{(signature ? "" : "struct ")}{type.Name}";
+                return $"{(structure ? "struct " : "")}{type.Name}";
             }
             
             throw new NotSupportedException($"User defined structs are not yet implemented, cannot use {type}!");

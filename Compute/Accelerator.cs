@@ -90,7 +90,7 @@ namespace Compute
             return result == CLEnum.True;
         }
 
-        public unsafe Context CreateContext()
+        public Context CreateContext()
         {
             var devices = new[]
             {
@@ -129,7 +129,7 @@ namespace Compute
             
             var context = new Context(this, result, queue);
 
-            OpenContexts.Remove(context);
+            OpenContexts.Add(context);
 
             return context;
         }
@@ -182,7 +182,7 @@ namespace Compute
 
         private void ReleaseUnmanagedResources()
         {
-            foreach (var context in OpenContexts)
+            foreach (var context in OpenContexts.ToArray())
             {
                 context.Dispose();
             }

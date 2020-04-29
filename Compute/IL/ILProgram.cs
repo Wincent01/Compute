@@ -37,14 +37,24 @@ namespace Compute.IL
 
         public KernelDelegate Compile<T>(T @delegate) where T : Delegate
         {
-            var method = @delegate.Method;
+            return CompileDelegate(@delegate.Method, out _);
+        }
 
+        public KernelDelegate Compile<T>(T @delegate, out string code) where T : Delegate
+        {
+            return CompileDelegate(@delegate.Method, out code);
+        }
+        
+        public KernelDelegate CompileDelegate(MethodInfo method, out string code)
+        {
+            code = "";
+            
             if (Programs.TryGetValue(method, out var value))
             {
                 return value;
             }
 
-            if (!method.IsStatic || @delegate.Target != default)
+            if (!method.IsStatic)
             {
                 throw new InvalidOperationException("Kernels need to be static methods!");
             }
@@ -56,23 +66,30 @@ namespace Compute.IL
                 throw new InvalidOperationException("Kernels must be marked with the Kernel attribute!");
             }
 
-            var source = Compile(@delegate.Method);
+            var source = Compile(method);
 
-            var code = CompleteSource(source);
+            code = CompleteSource(source);
 
-            var program = DeviceProgram.FromSource(Context, code);
+            try
+            {
+                var program = DeviceProgram.FromSource(Context, code);
 
-            Console.WriteLine(code);
+                program.Build();
+
+                var kernel = program.BuildKernel(method.Name);
+
+                value = (workers, parameters) => KernelInvoker(source, parameters, kernel, workers);
+
+                Programs[method] = value;
             
-            program.Build();
+                return value;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
 
-            var kernel = program.BuildKernel(method.Name);
-
-            value = (workers, parameters) => KernelInvoker(source, parameters, kernel, workers);
-
-            Programs[method] = value;
-            
-            return value;
+                return null;
+            }
         }
 
         private void KernelInvoker(ILSource source, UIntPtr[] parameters, Kernel kernel, uint workers)
@@ -156,8 +173,12 @@ namespace Compute.IL
 
             var builder = new StringBuilder();
 
-            foreach (var signature in linked.OfType<ILStruct>().Select(l => l.Signature))
+            foreach (var code in linked.OfType<ILStruct>().Reverse())
             {
+                var signature = code.Signature;
+                
+                Console.WriteLine(signature);
+                
                 builder.AppendLine($"{signature};");
             }
 

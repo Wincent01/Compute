@@ -3,7 +3,7 @@ using Mono.Cecil.Cil;
 
 namespace Compute.IL.Instructions
 {
-    [Instruction(Code.Stelem_R4, Code.Stelem_Any)]
+    [Instruction(Code.Stelem_R4, Code.Stelem_Any, Code.Stelem_I4)]
     public class StelemInstruction : InstructionBase
     {
         public override string Compile()
@@ -18,9 +18,9 @@ namespace Compute.IL.Instructions
                     return $"{array}[{index}] = ({value})";
                 case Code.Stelem_R4:
                     return $"{array}[{index}] = (({typeof(float).CLString(Source)}) {value})";
+                default:
+                    return $"{array}[{index}] = ({value})";
             }
-
-            return "";
         }
     }
 }

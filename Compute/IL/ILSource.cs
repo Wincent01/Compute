@@ -1,5 +1,3 @@
-using System;
-using System.Linq;
 using System.Reflection;
 using Compute.IL.Compiler;
 
@@ -38,18 +36,9 @@ namespace Compute.IL
             return source;
         }
 
-        public void Link(MethodInfo info)
+        public override string ToString()
         {
-            if (Linked.OfType<ILSource>().Any(l => l.Info.Equals(info))) return;
-
-            Linked.Add(Program.Compile(info));
-        }
-
-        public void LinkStruct(Type type)
-        {
-            if (Linked.OfType<ILStruct>().Any(l => l.Type == type)) return;
-            
-            Linked.Add(Program.Register(type));
+            return Info.ToString();
         }
     }
 }

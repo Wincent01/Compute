@@ -35,6 +35,10 @@ namespace Compute.IL.Instructions
                     index = (int) Instruction.Operand;
                     Stack.Push($"&{GetArgument(index)}");
                     break;
+                case Code.Ldarg_S:
+                    index = ((ParameterReference) Instruction.Operand).Index;
+                    Stack.Push(GetArgument(index));
+                    break;
                 case Code.Ldarga_S:
                     index = ((ParameterDefinition) Instruction.Operand).Index;
                     Stack.Push($"&{GetArgument(index)}");

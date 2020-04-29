@@ -11,7 +11,7 @@ namespace Compute.IL
         
         protected override void Compile()
         {
-            Source = "";
+            CLStructGenerator.GenerateStruct(Type, this);
         }
 
         internal static T Compile<T>(Type type, ILProgram program) where T : ILStruct, new()
@@ -25,6 +25,11 @@ namespace Compute.IL
             source.Compile();
 
             return source;
+        }
+
+        public override string ToString()
+        {
+            return Type.ToString();
         }
     }
 }

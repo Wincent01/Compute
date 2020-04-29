@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using Compute.IL.Compiler;
 using Mono.Cecil;
@@ -19,6 +18,8 @@ namespace Compute.IL.Instructions
         public Dictionary<int, object> Variables { get; set; }
 
         public ILSource Source { get; set; }
+        
+        public List<string> Prefix { get; set; }
         
         public abstract string Compile();
 
