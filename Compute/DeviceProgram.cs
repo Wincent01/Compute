@@ -74,7 +74,7 @@ namespace Compute
 
             var str = new string(buffer.Select(b => (char) b).ToArray());
 
-            throw new Exception($"Failed to build device program!\n{str}");
+            throw new Exception($"Failed to build device program!\nError: [{error}]\nMessage: {str}");
         }
 
         public Kernel BuildKernel(string name)

@@ -1,12 +1,12 @@
 ﻿using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Numerics;
-using System.Runtime.InteropServices;
 using Compute.IL;
 using Compute.Memory;
-using Silk.NET.OpenCL;
 
 namespace Compute.Samples
 {
@@ -76,28 +76,61 @@ namespace Compute.Samples
             output[id] = matrix;
         }
 
-        private static void PrintAcceleratorDetails(Accelerator accelerator)
+        private static void PrintDetails<T>(T instance)
         {
-            Console.WriteLine($"{nameof(accelerator.Name)} = {accelerator.Name}");
-            Console.WriteLine($"{nameof(accelerator.Vendor)} = {accelerator.Vendor}");
-            Console.WriteLine($"{nameof(accelerator.Version)} = {accelerator.Version}");
-            Console.WriteLine($"{nameof(accelerator.DriverVersion)} = {accelerator.DriverVersion}");
-            Console.WriteLine($"{nameof(accelerator.Available)} = {accelerator.Available}");
-            Console.WriteLine($"{nameof(accelerator.CompilerAvailable)} = {accelerator.CompilerAvailable}");
-            Console.WriteLine($"{nameof(accelerator.Memory)} = {accelerator.Memory / Math.Pow(10, 9)} GB");
-            Console.WriteLine($"{nameof(accelerator.Units)} = {accelerator.Units}");
-            Console.WriteLine($"{nameof(accelerator.ClockFrequency)} = {accelerator.ClockFrequency} Mz");
+            foreach (var property in typeof(T).GetProperties())
+            {
+                object value;
+
+                try
+                {
+                    value = property.GetValue(instance);
+                }
+                catch
+                {
+                    Console.WriteLine($"{property.Name} = Error!");
+                    
+                    continue;
+                }
+                
+                if (value is IEnumerable enumerable && !(value is string))
+                {
+                    var objects = new List<object>();
+                    
+                    foreach (var obj in enumerable)
+                    {
+                        objects.Add(obj);
+                    }
+
+                    value = string.Join(", ", objects);
+                }
+                
+                Console.WriteLine($"{property.Name} = {value}");
+            }
         }
 
         private static void Main()
         {
-            var accelerator = Accelerator.FindAccelerator(AcceleratorType.Gpu);
+            foreach (var platform in Platform.Platforms)
+            {
+                PrintDetails(platform);
 
-            PrintAcceleratorDetails(accelerator);
+                Console.WriteLine();
 
+                foreach (var entry in platform.Accelerators)
+                {
+                    PrintDetails(entry);
+
+                    RunAccelerator(entry);
+                }
+
+                Console.WriteLine($"Done with: {platform.Name}");
+            }
+        }
+
+        public static void RunAccelerator(Accelerator accelerator)
+        {
             using var context = accelerator.CreateContext();
-
-            Console.WriteLine("Running...");
 
             var watch = new Stopwatch();
             watch.Start();
@@ -113,7 +146,7 @@ namespace Compute.Samples
             File.WriteAllText("kernel.cl", source); // Save source for debugging
 
             const int size = 1024 * 100;
-            const int rounds = 100;
+            const int rounds = 25;
 
             var random = new Random();
 
@@ -124,7 +157,7 @@ namespace Compute.Samples
             var results = new Matrix4x4[size];
 
             var data = new Matrix4x4[size];
-
+            
             using var input = new SharedCollection<Matrix4x4>(context, data, true);
 
             using var output = new SharedCollection<Matrix4x4>(context, results, true);

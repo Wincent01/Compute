@@ -177,8 +177,6 @@ namespace Compute.IL
             {
                 var signature = code.Signature;
                 
-                Console.WriteLine(signature);
-                
                 builder.AppendLine($"{signature};");
             }
 

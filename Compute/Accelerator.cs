@@ -26,7 +26,9 @@ namespace Compute
 
         public string[] Extensions => QueryString(CLEnum.DeviceExtensions).Split(' ');
 
-        public ulong Memory => QueryULong(CLEnum.DeviceGlobalMemSize);
+        public ulong GlobalMemory => QueryULong(CLEnum.DeviceGlobalMemSize);
+        
+        public ulong LocalMemory => QueryULong(CLEnum.DeviceLocalMemSize);
 
         public uint Units => QueryUInt(CLEnum.DeviceMaxComputeUnits);
 
@@ -37,6 +39,43 @@ namespace Compute
         public string Version => QueryString(CLEnum.DeviceVersion);
 
         public string DriverVersion => QueryString(CLEnum.DriverVersion);
+
+        public uint AddressBits => QueryUInt(CLEnum.DeviceAddressBits);
+
+        public bool LittleEndian => QueryBoolean(CLEnum.DeviceEndianLittle);
+
+        public bool ErrorCorrectionSupport => QueryBoolean(CLEnum.DeviceErrorCorrectionSupport);
+
+        public ulong MaxAllocSize => QueryULong(CLEnum.DeviceMaxMemAllocSize);
+
+        public uint MaxWorkDimensions => QueryUInt(CLEnum.DeviceMaxWorkItemDimensions);
+
+        public uint MaxWorkGroupSize => QueryUInt(CLEnum.DeviceMaxWorkGroupSize);
+
+        public IEnumerable<ulong> MaxWorkSizes
+        {
+            get
+            {
+                var results = QueryInfo(CLEnum.DeviceMaxWorkItemSizes);
+                
+                for (var i = 0; i < results.Length; i += 8)
+                {
+                    yield return BitConverter.ToUInt64(results, i);
+                }
+            }
+        }
+
+        public string Profile => QueryString(CLEnum.DeviceProfile);
+
+        public string BoardNameAmd => QueryString((CLEnum) 0x4038);
+
+        public ulong FreeMemoryAmd => QueryULong((CLEnum) 0x4039) * 1000;
+
+        public uint MultiplierPerUnitAmd => QueryUInt((CLEnum) 0x4040);
+        
+        public uint InstructionsPerUnitAmd => QueryUInt((CLEnum) 0x4042);
+
+        public uint LocalMemoryPerUnitAmd => QueryUInt((CLEnum) 0x4047);
         
         private byte[] QueryInfo(CLEnum type)
         {
@@ -186,6 +225,8 @@ namespace Compute
             {
                 context.Dispose();
             }
+
+            Bindings.OpenCl.ReleaseDevice(Handle);
             
             OpenContexts.Clear();
         }

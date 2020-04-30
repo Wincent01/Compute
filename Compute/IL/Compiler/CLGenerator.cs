@@ -88,7 +88,18 @@ namespace Compute.IL.Compiler
             {
                 return "char*";
             }
-            
+
+            if (type.IsPointer)
+            {
+                builder.Append(type);
+
+                builder.Length--;
+
+                var baseType = TypeHelper.Find(builder.ToString());
+
+                return $"{GenerateType(baseType, code, structure)}*";
+            }
+
             if (!type.IsValueType)
             {
                 throw new Exception($"Type must be a {nameof(ValueType)}, got {type}!");

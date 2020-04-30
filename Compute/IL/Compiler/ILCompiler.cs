@@ -11,6 +11,14 @@ namespace Compute.IL.Compiler
         {
             var builder = new StringBuilder();
 
+            var atomic = method.GetCustomAttribute<AtomicAttribute>();
+
+            if (atomic != null)
+            {
+                builder.AppendLine("#pragma OPENCL EXTENSION cl_khr_int64_base_atomics : enable");
+                builder.AppendLine("#pragma OPENCL EXTENSION cl_khr_int64_extended_atomics : enable");
+            }
+
             builder.Append($"{CLGenerator.GenerateSignature(method, source)}");
 
             builder.Append("\n{\n");
