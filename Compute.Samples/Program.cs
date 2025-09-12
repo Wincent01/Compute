@@ -120,8 +120,11 @@ namespace Compute.Samples
                 foreach (var entry in platform.Accelerators)
                 {
                     PrintDetails(entry);
+                    
+                    // Demonstrate multi-dimensional worker support
+                    MultiDimensionalExample.RunMultiDimensionalExamples(entry);
 
-                    RunAccelerator(entry);
+                    //RunAccelerator(entry);
                 }
 
                 Console.WriteLine($"Done with: {platform.Name}");
@@ -137,7 +140,7 @@ namespace Compute.Samples
 
             var ilProgram = new ILProgram(context);
 
-            var ilKernel = ilProgram.Compile<Action<Matrix4x4[], Matrix4x4[], uint>>(ExampleKernel);
+            var ilKernel = ilProgram.Compile(ExampleKernel);
 
             Console.WriteLine($"Compile kernel: {watch.ElapsedMilliseconds}ms");
 
@@ -186,7 +189,7 @@ namespace Compute.Samples
 
                 watch.Restart();
                 
-                ilKernel.Invoke(size, input.UPtr, output.UPtr, (UIntPtr) size);
+                ilKernel.Invoke(new WorkerDimensions(size), input.UPtr, output.UPtr, (UIntPtr) size);
 
                 var gpu = watch.ElapsedMilliseconds;
 

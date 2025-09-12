@@ -2,5 +2,5 @@ using System;
 
 namespace Compute.IL
 {
-    public delegate void KernelDelegate(uint workers, params UIntPtr[] parameters);
+    public delegate void KernelDelegate(WorkerDimensions workers, params UIntPtr[] parameters);
 }

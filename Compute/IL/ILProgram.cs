@@ -92,7 +92,7 @@ namespace Compute.IL
             }
         }
 
-        private void KernelInvoker(ILSource source, UIntPtr[] parameters, Kernel kernel, uint workers)
+        private void KernelInvoker(ILSource source, UIntPtr[] parameters, Kernel kernel, WorkerDimensions workers)
         {
             var values = new List<KernelArgument>();
 

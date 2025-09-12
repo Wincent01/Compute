@@ -3,10 +3,12 @@ using Mono.Cecil.Cil;
 
 namespace Compute.IL.Instructions
 {
-    [Instruction(Code.Conv_R4,
+    [Instruction(
+        Code.Conv_R4,
         Code.Conv_U, Code.Conv_I8,
-        Code.Conv_U8, Code.Conv_R_Un)
-    ]
+        Code.Conv_U8, Code.Conv_R_Un,
+        Code.Conv_Ovf_I
+    )]
     public class ConvInstruction : InstructionBase
     {
         public override string Compile()
@@ -27,6 +29,9 @@ namespace Compute.IL.Instructions
                     break;
                 case Code.Conv_R_Un:
                     Stack.Push($"({typeof(float).CLString(Source)}) ({Stack.Pop()})");
+                    break;
+                case Code.Conv_Ovf_I:
+                    Stack.Push($"({typeof(int).CLString(Source)}) ({Stack.Pop()})");
                     break;
             }
 
