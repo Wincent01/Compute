@@ -24,39 +24,45 @@ namespace Compute
             Context.DevicePrograms.Add(this);
         }
 
-        public static DeviceProgram FromSource(Context context, string source)
+        public static unsafe DeviceProgram FromSource(Context context, string source)
         {
-            var code = new[]
-            {
-                $"{source}\0"
-            };
+            var sourceBytes = System.Text.Encoding.UTF8.GetBytes(source + "\0");
+            var lengths = new UIntPtr[] { (UIntPtr)sourceBytes.Length };
+            var error = new int[1];
 
-            var result = Bindings.OpenCl.CreateProgramWithSource(context.Handle,
-                1,
-                code,
-                Span<UIntPtr>.Empty,
-                Span<int>.Empty
-            );
-
-            if (result == IntPtr.Zero)
+            fixed (byte* sourceBytesPtr = sourceBytes)
+            fixed (UIntPtr* lengthsPtr = lengths)
             {
-                throw new Exception("Failed to create compute program!");
+                var sourcePtrs = stackalloc byte*[1];
+                sourcePtrs[0] = sourceBytesPtr;
+
+                var result = Bindings.OpenCl.CreateProgramWithSource(context.Handle,
+                    1,
+                    sourcePtrs,
+                    lengthsPtr,
+                    error
+                );
+
+                if (result == IntPtr.Zero)
+                {
+                    throw new Exception("Failed to create compute program!");
+                }
+
+                return new DeviceProgram(context, result);
             }
-
-            return new DeviceProgram(context, result);
         }
 
-        public void Build()
+        public unsafe void Build()
         {
-            var error = (CLEnum) Bindings.OpenCl.BuildProgram(Handle,
+            var error = (ErrorCodes) Bindings.OpenCl.BuildProgram(Handle,
                 0,
-                Span<IntPtr>.Empty,
-                Span<char>.Empty,
+                (IntPtr*)null,
+                (string)null,
                 null,
-                Span<byte>.Empty
+                null
             );
 
-            if (error == CLEnum.Success) return;
+            if (error == ErrorCodes.Success) return;
             
             var buffer = new byte[2048];
 
@@ -64,7 +70,7 @@ namespace Compute
 
             Bindings.OpenCl.GetProgramBuildInfo(Handle,
                 Context.Accelerator.Handle,
-                (uint) CLEnum.ProgramBuildLog,
+                ProgramBuildInfo.BuildLog,
                 (UIntPtr) buffer.Length,
                 new Span<byte>(buffer),
                 new Span<UIntPtr>(length)

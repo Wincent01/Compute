@@ -1,0 +1,29 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "C#: Compute.Samples Debug (Dedicated GPU)",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "${workspaceFolder}/Compute.Samples/bin/Debug/net9.0/Compute.Samples.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/Compute.Samples",
+            "env": {
+                "DRI_PRIME": "1",
+                "__NV_PRIME_RENDER_OFFLOAD": "1",
+                "__GLX_VENDOR_LIBRARY_NAME": "nvidia"
+            },
+            "preLaunchTask": "build"
+        },
+        {
+            "name": "C#: Compute.Samples Debug (Integrated GPU)",
+            "type": "dotnet",
+            "request": "launch",
+            "projectPath": "${workspaceFolder}/Compute.Samples/Compute.Samples.csproj"
+        }
+
+    ]
+}

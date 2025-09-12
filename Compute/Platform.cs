@@ -9,15 +9,15 @@ namespace Compute
     {
         public IntPtr Handle { get; }
 
-        public string Profile => QueryString(CLEnum.PlatformProfile);
+        public string Profile => QueryString(PlatformInfo.Profile);
 
-        public string Version => QueryString(CLEnum.PlatformVersion);
+        public string Version => QueryString(PlatformInfo.Version);
 
-        public string Name => QueryString(CLEnum.PlatformName);
+        public string Name => QueryString(PlatformInfo.Name);
 
-        public string Vendor => QueryString(CLEnum.PlatformVendor);
+        public string Vendor => QueryString(PlatformInfo.Vendor);
 
-        public string[] Extensions => QueryString(CLEnum.PlatformExtensions).Split(' ');
+        public string[] Extensions => QueryString(PlatformInfo.Extensions).Split(' ');
         
         public Platform(IntPtr handle)
         {
@@ -32,9 +32,9 @@ namespace Compute
                 
                 var size = new uint[1];
 
-                var error = (CLEnum) Bindings.OpenCl.GetPlatformIDs((uint) platforms.Length, platforms, size);
+                var error = (ErrorCodes) Bindings.OpenCl.GetPlatformIDs((uint) platforms.Length, platforms, size);
 
-                if (error != CLEnum.Success)
+                if (error != ErrorCodes.Success)
                 {
                     throw new Exception("Failed to get platform identifiers!");
                 }
@@ -58,15 +58,15 @@ namespace Compute
 
                 var span = new Span<IntPtr>(result);
 
-                var error = (CLEnum) Bindings.OpenCl.GetDeviceIDs(
+                var error = (ErrorCodes) Bindings.OpenCl.GetDeviceIDs(
                     Handle,
-                    CLEnum.DeviceTypeAll,
+                    DeviceType.All,
                     (uint) result.Length,
                     span,
                     size
                 );
 
-                if (error != CLEnum.Success)
+                if (error != ErrorCodes.Success)
                 {
                     throw new Exception("Failed to create device group!");
                 }
@@ -80,21 +80,21 @@ namespace Compute
             }
         }
         
-        private byte[] QueryInfo(CLEnum type)
+        private byte[] QueryInfo(PlatformInfo type)
         {
             var result = new byte[1024];
 
             var size = new UIntPtr[1];
 
-            var error = (CLEnum) Bindings.OpenCl.GetPlatformInfo(
+            var error = (ErrorCodes) Bindings.OpenCl.GetPlatformInfo(
                 Handle,
-                (uint) type,
+                type,
                 (UIntPtr) result.Length,
                 new Span<byte>(result),
                 new Span<UIntPtr>(size)
             );
 
-            if (error != CLEnum.Success)
+            if (error != ErrorCodes.Success)
             {
                 throw new Exception($"Failed to get device info \"{type}\"!");
             }
@@ -104,7 +104,7 @@ namespace Compute
             return result;
         }
 
-        private string QueryString(CLEnum type)
+        private string QueryString(PlatformInfo type)
         {
             var result = QueryInfo(type);
 

@@ -25,7 +25,7 @@ namespace Compute.Memory
         {
             Context = context;
             
-            Handle = Context.CreateBuffer(size, CLEnum.MemReadWrite);
+            Handle = Context.CreateBuffer(size, MemFlags.ReadWrite);
 
             Length = size;
         }

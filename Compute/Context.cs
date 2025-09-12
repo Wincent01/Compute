@@ -32,14 +32,15 @@ namespace Compute
             Queue = queue;
         }
 
-        public IntPtr CreateBuffer(uint size, CLEnum flags)
+        public IntPtr CreateBuffer(uint size, MemFlags flags)
         {
+            var error = new int[1];
             var result = Bindings.OpenCl.CreateBuffer(
                 Handle,
                 flags,
                 (UIntPtr) size,
                 Span<byte>.Empty,
-                Span<int>.Empty
+                new Span<int>(error)
             );
 
             if (result == IntPtr.Zero)
@@ -47,9 +48,9 @@ namespace Compute
                 throw new Exception("Failed to allocate device memory!");
             }
 
-            var error = (CLEnum) Bindings.OpenCl.RetainMemObject(result);
+            var retainError = (ErrorCodes) Bindings.OpenCl.RetainMemObject(result);
 
-            if (error != CLEnum.Success)
+            if (retainError != ErrorCodes.Success)
             {
                 throw new Exception("Failed to retain device memory!");
             }
@@ -65,7 +66,7 @@ namespace Compute
             
             var result = Bindings.OpenCl.CreateBuffer(
                 Handle,
-                CLEnum.MemUseHostPtr,
+                MemFlags.UseHostPtr,
                 (UIntPtr) (span.Length * Marshal.SizeOf<T>()),
                 span,
                 new Span<int>(error)
@@ -76,9 +77,9 @@ namespace Compute
                 throw new Exception("Failed to allocate device host memory!");
             }
 
-            var retainError = (CLEnum) Bindings.OpenCl.RetainMemObject(result);
+            var retainError = (ErrorCodes) Bindings.OpenCl.RetainMemObject(result);
 
-            if (retainError != CLEnum.Success)
+            if (retainError != ErrorCodes.Success)
             {
                 throw new Exception("Failed to retain device host memory!");
             }
@@ -97,7 +98,7 @@ namespace Compute
             
             var result = Bindings.OpenCl.CreateBuffer(
                 Handle,
-                CLEnum.MemAllocHostPtr | CLEnum.MemReadWrite,
+                MemFlags.AllocHostPtr | MemFlags.ReadWrite,
                 (UIntPtr) size,
                 &ptr,
                 &error
@@ -113,8 +114,9 @@ namespace Compute
             return result;
         }
 
-        public unsafe IntPtr MapBuffer(IntPtr buffer, uint size, CLEnum flags)
+        public unsafe IntPtr MapBuffer(IntPtr buffer, uint size, MapFlags flags)
         {
+            var error = 0;
             var result = Bindings.OpenCl.EnqueueMapBuffer(Queue,
                 buffer,
                 true,
@@ -122,9 +124,9 @@ namespace Compute
                 (UIntPtr) 0,
                 (UIntPtr) size,
                 0,
-                Span<IntPtr>.Empty,
-                Span<IntPtr>.Empty,
-                Span<int>.Empty
+                null,
+                null,
+                &error
             );
             
             var ptr = new IntPtr(result);
@@ -139,7 +141,7 @@ namespace Compute
 
         public unsafe void UnmapBuffer(IntPtr buffer, IntPtr map)
         {
-            var results = (CLEnum) Bindings.OpenCl.EnqueueUnmapMemObject(Queue,
+            var results = (ErrorCodes) Bindings.OpenCl.EnqueueUnmapMemObject(Queue,
                 buffer,
                 map.ToPointer(),
                 0,
@@ -147,7 +149,7 @@ namespace Compute
                 null
             );
 
-            if (results != CLEnum.Success)
+            if (results != ErrorCodes.Success)
             {
                 throw new Exception($"Failed to unmap device memory!");
             }
@@ -160,49 +162,55 @@ namespace Compute
             OpenBuffers.Remove(buffer);
         }
 
-        public void WriteBuffer<T>(IntPtr buffer, Span<T> data, uint offset) where T : unmanaged
+        public unsafe void WriteBuffer<T>(IntPtr buffer, Span<T> data, uint offset) where T : unmanaged
         {
             var watch = new Stopwatch();
 
             watch.Start();
 
-            var error = (CLEnum) Bindings.OpenCl.EnqueueWriteBuffer(
-                Queue,
-                buffer,
-                true,
-                (UIntPtr) offset,
-                (UIntPtr) (data.Length * Marshal.SizeOf<T>()),
-                data,
-                0,
-                Span<IntPtr>.Empty,
-                Span<IntPtr>.Empty
-            );
-            
-            if (error != CLEnum.Success)
+            fixed (T* dataPtr = data)
             {
-                throw new Exception("Failed to write device memory!");
+                var error = (ErrorCodes) Bindings.OpenCl.EnqueueWriteBuffer(
+                    Queue,
+                    buffer,
+                    true,
+                    (UIntPtr) offset,
+                    (UIntPtr) (data.Length * Marshal.SizeOf<T>()),
+                    dataPtr,
+                    0,
+                    null,
+                    null
+                );
+                
+                if (error != ErrorCodes.Success)
+                {
+                    throw new Exception("Failed to write device memory!");
+                }
             }
         }
 
-        public Span<T> ReadBuffer<T>(IntPtr buffer, uint size, uint offset) where T : unmanaged
+        public unsafe Span<T> ReadBuffer<T>(IntPtr buffer, uint size, uint offset) where T : unmanaged
         {
             var result = new T[size];
 
-            var error = (CLEnum) Bindings.OpenCl.EnqueueReadBuffer(
-                Queue,
-                buffer,
-                true,
-                (UIntPtr) offset,
-                (UIntPtr) (size * Marshal.SizeOf<T>()),
-                new Span<T>(result),
-                0,
-                Span<IntPtr>.Empty,
-                Span<IntPtr>.Empty
-            );
-
-            if (error != CLEnum.Success)
+            fixed (T* resultPtr = result)
             {
-                throw new Exception("Failed to read device memory!");
+                var error = (ErrorCodes) Bindings.OpenCl.EnqueueReadBuffer(
+                    Queue,
+                    buffer,
+                    true,
+                    (UIntPtr) offset,
+                    (UIntPtr) (size * Marshal.SizeOf<T>()),
+                    resultPtr,
+                    0,
+                    null,
+                    null
+                );
+
+                if (error != ErrorCodes.Success)
+                {
+                    throw new Exception("Failed to read device memory!");
+                }
             }
 
             return result;
@@ -218,21 +226,21 @@ namespace Compute
             Bindings.OpenCl.Flush(Queue);
         }
 
-        public uint QueryCommandQueue(CLEnum flag)
+        public uint QueryCommandQueue(CommandQueueInfo flag)
         {
             var bytes = new byte[1024];
 
             var size = new UIntPtr[1];
 
-            var error = (CLEnum) Bindings.OpenCl.GetCommandQueueInfo(
+            var error = (ErrorCodes) Bindings.OpenCl.GetCommandQueueInfo(
                 Queue,
-                (uint) flag,
+                flag,
                 (UIntPtr) bytes.Length,
                 new Span<byte>(bytes),
                 new Span<UIntPtr>(size)
             );
 
-            if (error != CLEnum.Success)
+            if (error != ErrorCodes.Success)
             {
                 throw new Exception("Failed to query command queue!");
             }

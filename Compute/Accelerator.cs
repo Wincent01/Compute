@@ -18,45 +18,45 @@ namespace Compute
             Handle = handle;
         }
 
-        public string Name => QueryString(CLEnum.DeviceName);
+        public string Name => QueryString(DeviceInfo.Name);
 
-        public bool Available => QueryBoolean(CLEnum.DeviceAvailable);
+        public bool Available => QueryBoolean(DeviceInfo.Available);
 
-        public bool CompilerAvailable => QueryBoolean(CLEnum.DeviceCompilerAvailable);
+        public bool CompilerAvailable => QueryBoolean(DeviceInfo.CompilerAvailable);
 
-        public string[] Extensions => QueryString(CLEnum.DeviceExtensions).Split(' ');
+        public string[] Extensions => QueryString(DeviceInfo.Extensions).Split(' ');
 
-        public ulong GlobalMemory => QueryULong(CLEnum.DeviceGlobalMemSize);
+        public ulong GlobalMemory => QueryULong(DeviceInfo.GlobalMemSize);
         
-        public ulong LocalMemory => QueryULong(CLEnum.DeviceLocalMemSize);
+        public ulong LocalMemory => QueryULong(DeviceInfo.LocalMemSize);
 
-        public uint Units => QueryUInt(CLEnum.DeviceMaxComputeUnits);
+        public uint Units => QueryUInt(DeviceInfo.MaxComputeUnits);
 
-        public uint ClockFrequency => QueryUInt(CLEnum.DeviceMaxClockFrequency);
+        public uint ClockFrequency => QueryUInt(DeviceInfo.MaxClockFrequency);
 
-        public string Vendor => QueryString(CLEnum.DeviceVendor);
+        public string Vendor => QueryString(DeviceInfo.Vendor);
 
-        public string Version => QueryString(CLEnum.DeviceVersion);
+        public string Version => QueryString(DeviceInfo.Version);
 
-        public string DriverVersion => QueryString(CLEnum.DriverVersion);
+        public string DriverVersion => QueryString(DeviceInfo.DriverVersion);
 
-        public uint AddressBits => QueryUInt(CLEnum.DeviceAddressBits);
+        public uint AddressBits => QueryUInt(DeviceInfo.AddressBits);
 
-        public bool LittleEndian => QueryBoolean(CLEnum.DeviceEndianLittle);
+        public bool LittleEndian => QueryBoolean(DeviceInfo.EndianLittle);
 
-        public bool ErrorCorrectionSupport => QueryBoolean(CLEnum.DeviceErrorCorrectionSupport);
+        public bool ErrorCorrectionSupport => QueryBoolean(DeviceInfo.ErrorCorrectionSupport);
 
-        public ulong MaxAllocSize => QueryULong(CLEnum.DeviceMaxMemAllocSize);
+        public ulong MaxAllocSize => QueryULong(DeviceInfo.MaxMemAllocSize);
 
-        public uint MaxWorkDimensions => QueryUInt(CLEnum.DeviceMaxWorkItemDimensions);
+        public uint MaxWorkDimensions => QueryUInt(DeviceInfo.MaxWorkItemDimensions);
 
-        public uint MaxWorkGroupSize => QueryUInt(CLEnum.DeviceMaxWorkGroupSize);
+        public uint MaxWorkGroupSize => QueryUInt(DeviceInfo.MaxWorkGroupSize);
 
         public IEnumerable<ulong> MaxWorkSizes
         {
             get
             {
-                var results = QueryInfo(CLEnum.DeviceMaxWorkItemSizes);
+                var results = QueryInfo(DeviceInfo.MaxWorkItemSizes);
                 
                 for (var i = 0; i < results.Length; i += 8)
                 {
@@ -65,33 +65,33 @@ namespace Compute
             }
         }
 
-        public string Profile => QueryString(CLEnum.DeviceProfile);
+        public string Profile => QueryString(DeviceInfo.Profile);
 
-        public string BoardNameAmd => QueryString((CLEnum) 0x4038);
+        public string BoardNameAmd => QueryString( (DeviceInfo) 0x4038);
 
-        public ulong FreeMemoryAmd => QueryULong((CLEnum) 0x4039) * 1000;
+        public ulong FreeMemoryAmd => QueryULong((DeviceInfo) 0x4039) * 1000;
 
-        public uint MultiplierPerUnitAmd => QueryUInt((CLEnum) 0x4040);
+        public uint MultiplierPerUnitAmd => QueryUInt((DeviceInfo) 0x4040);
         
-        public uint InstructionsPerUnitAmd => QueryUInt((CLEnum) 0x4042);
+        public uint InstructionsPerUnitAmd => QueryUInt((DeviceInfo) 0x4042);
 
-        public uint LocalMemoryPerUnitAmd => QueryUInt((CLEnum) 0x4047);
+        public uint LocalMemoryPerUnitAmd => QueryUInt((DeviceInfo) 0x4047);
         
-        private byte[] QueryInfo(CLEnum type)
+        private byte[] QueryInfo(DeviceInfo type)
         {
             var result = new byte[1024];
 
             var size = new UIntPtr[1];
 
-            var error = (CLEnum) Bindings.OpenCl.GetDeviceInfo(
+            var error = (ErrorCodes) Bindings.OpenCl.GetDeviceInfo(
                 Handle,
-                (uint) type,
+                type,
                 (UIntPtr) result.Length,
                 new Span<byte>(result),
                 new Span<UIntPtr>(size)
             );
 
-            if (error != CLEnum.Success)
+            if (error != ErrorCodes.Success)
             {
                 throw new Exception($"Failed to get device info \"{type}\"!");
             }
@@ -101,32 +101,32 @@ namespace Compute
             return result;
         }
 
-        private string QueryString(CLEnum type)
+        private string QueryString(DeviceInfo type)
         {
             var result = QueryInfo(type);
 
             return new string(result.Select(b => (char) b).ToArray()).Replace("\0", "");
         }
 
-        private uint QueryUInt(CLEnum type)
+        private uint QueryUInt(DeviceInfo type)
         {
             var result = QueryInfo(type);
 
             return BitConverter.ToUInt32(result);
         }
         
-        private ulong QueryULong(CLEnum type)
+        private ulong QueryULong(DeviceInfo type)
         {
             var result = QueryInfo(type);
 
             return BitConverter.ToUInt64(result);
         }
 
-        private bool QueryBoolean(CLEnum type)
+        private bool QueryBoolean(DeviceInfo type)
         {
-            var result = (CLEnum) QueryUInt(type);
+            var result = (Bool) QueryUInt(type);
 
-            return result == CLEnum.True;
+            return result == Bool.True;
         }
 
         public Context CreateContext()
@@ -152,16 +152,16 @@ namespace Compute
                 throw new Exception("Failed to create a compute context!");
             }
 
-            var queue = Bindings.OpenCl.CreateCommandQueue(result, Handle, 0, error);
+            var queue = Bindings.OpenCl.CreateCommandQueue(result, Handle, CommandQueueProperties.None, new Span<int>(error));
 
             if (queue == IntPtr.Zero)
             {
                 throw new Exception("Failed to create command queue!");
             }
             
-            var retain = (CLEnum) Bindings.OpenCl.RetainCommandQueue(queue);
+            var retain = (ErrorCodes) Bindings.OpenCl.RetainCommandQueue(queue);
 
-            if (retain != CLEnum.Success)
+            if (retain != ErrorCodes.Success)
             {
                 throw new Exception("Failed to retain command queue!");
             }
@@ -189,24 +189,25 @@ namespace Compute
         {
             var deviceType = type switch
             {
-                AcceleratorType.Cpu => CLEnum.DeviceTypeCpu,
-                AcceleratorType.Gpu => CLEnum.DeviceTypeGpu,
+                AcceleratorType.Cpu => DeviceType.Cpu,
+                AcceleratorType.Gpu => DeviceType.Gpu,
                 _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
             };
 
             var result = new IntPtr[1];
+            var count = new uint[1];
 
             var span = new Span<IntPtr>(result);
 
-            var error = (CLEnum) Bindings.OpenCl.GetDeviceIDs(
+            var error = (ErrorCodes) Bindings.OpenCl.GetDeviceIDs(
                 IntPtr.Zero,
                 deviceType,
                 1,
                 span,
-                null
+                new Span<uint>(count)
             );
 
-            if (error != CLEnum.Success)
+            if (error != ErrorCodes.Success)
             {
                 throw new Exception("Failed to create device group!");
             }

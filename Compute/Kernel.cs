@@ -26,16 +26,16 @@ namespace Compute
         {
             var size = new UIntPtr[1];
 
-            var error = (CLEnum) Bindings.OpenCl.GetKernelWorkGroupInfo(
+            var error = (ErrorCodes) Bindings.OpenCl.GetKernelWorkGroupInfo(
                 Handle,
                 Program.Context.Accelerator.Handle,
-                (uint) CLEnum.KernelWorkGroupSize,
+                KernelWorkGroupInfo.WorkGroupSize,
                 (UIntPtr) UIntPtr.Size,
                 new Span<UIntPtr>(size),
                 Span<UIntPtr>.Empty
             );
 
-            if (error != CLEnum.Success)
+            if (error != ErrorCodes.Success)
             {
                 throw new Exception("Failed to get max kernel group size!");
             }
@@ -43,27 +43,24 @@ namespace Compute
             return (uint) size[default];
         }
 
-        public void Invoke(uint workers, params KernelArgument[] parameters)
+        public unsafe void Invoke(uint workers, params KernelArgument[] parameters)
         {
-            CLEnum error;
+            ErrorCodes error;
 
             for (var index = 0; index < parameters.Length; index++)
             {
                 var parameter = parameters[index];
 
-                var arg = new[]
-                {
-                    parameter.Value
-                };
+                var arg = parameter.Value;
 
-                error = (CLEnum) Bindings.OpenCl.SetKernelArg(
+                error = (ErrorCodes) Bindings.OpenCl.SetKernelArg(
                     Handle,
                     (uint) index,
                     (UIntPtr) parameter.Size,
-                    new Span<UIntPtr>(arg)
+                    &arg
                 );
 
-                if (error != CLEnum.Success)
+                if (error != ErrorCodes.Success)
                 {
                     throw new Exception("Failed to set kernel argument!");
                 }
@@ -79,26 +76,30 @@ namespace Compute
                 (UIntPtr) workers
             };
 
-            error = (CLEnum) Bindings.OpenCl.EnqueueNdrangeKernel(
-                Program.Context.Queue,
-                Handle,
-                1,
-                Span<UIntPtr>.Empty,
-                new Span<UIntPtr>(global),
-                new Span<UIntPtr>(local),
-                0,
-                Span<IntPtr>.Empty,
-                Span<IntPtr>.Empty
-            );
+            fixed (UIntPtr* globalPtr = global)
+            fixed (UIntPtr* localPtr = local)
+            {
+                error = (ErrorCodes) Bindings.OpenCl.EnqueueNdrangeKernel(
+                    Program.Context.Queue,
+                    Handle,
+                    1,
+                    null,
+                    globalPtr,
+                    localPtr,
+                    0,
+                    null,
+                    null
+                );
+            }
 
-            if (error != CLEnum.Success)
+            if (error != ErrorCodes.Success)
             {
                 throw new Exception("Failed to invoke kernel!");
             }
             
-            error = (CLEnum) Bindings.OpenCl.Finish(Program.Context.Queue);
+            error = (ErrorCodes) Bindings.OpenCl.Finish(Program.Context.Queue);
 
-            if (error != CLEnum.Success)
+            if (error != ErrorCodes.Success)
             {
                 throw new Exception($"Failed to finish kernel call!");
             }
