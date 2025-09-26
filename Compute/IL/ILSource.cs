@@ -5,7 +5,7 @@ namespace Compute.IL
 {
     public class ILSource : ILCode
     {
-        public MethodInfo Info { get; protected set; }
+        public MethodBase Info { get; protected set; }
 
         public override string Signature => CLGenerator.GenerateSignature(Info, this);
         
@@ -16,7 +16,7 @@ namespace Compute.IL
             Source = ILCompiler.Compile(Info, this);
         }
 
-        internal static T Compile<T>(MethodInfo info, ILProgram program) where T : ILSource, new()
+        internal static T Compile<T>(MethodBase info, ILProgram program) where T : ILSource, new()
         {
             var source = new T
             {

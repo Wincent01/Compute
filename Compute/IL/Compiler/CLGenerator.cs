@@ -7,7 +7,7 @@ namespace Compute.IL.Compiler
 {
     public static class CLGenerator
     {
-        public static string GenerateSignature(MethodInfo method, ILCode code)
+        public static string GenerateSignature(MethodBase method, ILCode code)
         {
             var builder = new StringBuilder();
 
@@ -18,14 +18,30 @@ namespace Compute.IL.Compiler
                 builder.Append("__kernel ");
             }
 
-            builder.Append($"{GenerateType(method.ReturnType, code)} {method.Name}({GenerateArguments(method, code)})");
+            if (method is MethodInfo methodInfo)
+            {
+                builder.Append($"{GenerateType(methodInfo.ReturnType, code)} {methodInfo.Name}_method_{methodInfo.MetadataToken}({GenerateArguments(methodInfo, code)})");
+            }
+            else if (method is ConstructorInfo constructorInfo)
+            {
+                builder.Append($"void {constructorInfo.DeclaringType.Name}_ctor_{constructorInfo.MetadataToken}({GenerateArguments(constructorInfo, code)})");
+            }
+            else
+            {
+                throw new NotSupportedException($"Only {nameof(MethodInfo)} and {nameof(ConstructorInfo)} are supported, got {method.GetType().Name}!");
+            }
 
             return builder.ToString();
         }
 
-        public static string GenerateArguments(MethodInfo method, ILCode code)
+        public static string GenerateArguments(MethodBase method, ILCode code)
         {
             var builder = new StringBuilder();
+
+            if ((method is MethodInfo && !method.IsStatic) || method is ConstructorInfo)
+            {
+                builder.Append($"{GenerateType(method.DeclaringType, code)} this, ");
+            }
             
             foreach (var parameter in method.GetParameters())
             {
@@ -38,6 +54,22 @@ namespace Compute.IL.Compiler
             }
 
             return builder.ToString();
+        }
+
+        public static string GenerateKernelName(MethodBase method)
+        {
+            if (method is MethodInfo methodInfo)
+            {
+                return $"{methodInfo.Name}_method_{methodInfo.MetadataToken}";
+            }
+            else if (method is ConstructorInfo constructorInfo)
+            {
+                return $"{constructorInfo.DeclaringType.Name}_ctor_{constructorInfo.MetadataToken}";
+            }
+            else
+            {
+                throw new NotSupportedException($"Only {nameof(MethodInfo)} and {nameof(ConstructorInfo)} are supported, got {method.GetType().Name}!");
+            }
         }
 
         public static string GenerateArgumentPrefix(ParameterInfo parameter)

@@ -49,7 +49,7 @@ namespace Compute.IL
             }
         }
 
-        public void Link(MethodInfo info)
+        public void Link(MethodBase info)
         {
             if (LinkedCode.OfType<ILSource>().Any(l => l.Info.Equals(info))) return;
 

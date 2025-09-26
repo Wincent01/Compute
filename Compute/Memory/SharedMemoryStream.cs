@@ -68,9 +68,16 @@ namespace Compute.Memory
             return result;
         }
 
+        public void ReadNonAlloc<T>(Span<T> data, int count) where T : unmanaged
+        {
+            Context.ReadBufferNonAlloc(Handle, data, (uint)count, (uint)Position);
+
+            Position += Marshal.SizeOf<T>() * count;
+        }
+
         public override int Read(byte[] buffer, int offset, int count)
         {
-            var result = Context.ReadBuffer<byte>(Handle, (uint) count, (uint) Position).ToArray();
+            var result = Context.ReadBuffer<byte>(Handle, (uint)count, (uint)Position).ToArray();
 
             result.CopyTo(buffer, offset);
 

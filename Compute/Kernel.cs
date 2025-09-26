@@ -177,7 +177,7 @@ namespace Compute
             return 1;
         }
 
-        public unsafe void Invoke(WorkerDimensions workers, params KernelArgument[] parameters)
+        public unsafe void Invoke(WorkerDimensions workers, Span<KernelArgument> parameters)
         {
             ErrorCodes error;
 
@@ -190,7 +190,7 @@ namespace Compute
                 error = (ErrorCodes) Bindings.OpenCl.SetKernelArg(
                     Handle,
                     (uint) index,
-                    (UIntPtr) parameter.Size,
+                    parameter.Size,
                     &arg
                 );
 
@@ -241,7 +241,7 @@ namespace Compute
         /// Invokes the kernel with automatic local work group size determination.
         /// This is often safer for complex scenarios where manual calculation might fail.
         /// </summary>
-        public unsafe void InvokeAuto(WorkerDimensions workers, params KernelArgument[] parameters)
+        public unsafe void InvokeAuto(WorkerDimensions workers, Span<KernelArgument> parameters)
         {
             ErrorCodes error;
 
@@ -254,7 +254,7 @@ namespace Compute
                 error = (ErrorCodes) Bindings.OpenCl.SetKernelArg(
                     Handle,
                     (uint) index,
-                    (UIntPtr) parameter.Size,
+                    parameter.Size,
                     &arg
                 );
 

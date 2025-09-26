@@ -25,6 +25,12 @@ namespace Compute.IL.Instructions
 
         public string GetArgument(int index)
         {
+            if (Body.Method.HasThis)
+            {
+                index--;
+                if (index < 0) return "this";
+            }
+
             return Body.Method.Parameters[index].Name;
         }
 

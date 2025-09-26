@@ -7,7 +7,7 @@ namespace Compute.IL.Compiler
 {
     internal static class ILCompiler
     {
-        public static string Compile(MethodInfo method, ILSource source)
+        public static string Compile(MethodBase method, ILSource source)
         {
             var builder = new StringBuilder();
 
@@ -30,7 +30,7 @@ namespace Compute.IL.Compiler
             return builder.ToString();
         }
 
-        public static string GenerateBody(MethodInfo method, ILSource source)
+        public static string GenerateBody(MethodBase method, ILSource source)
         {
             var declaring = method.DeclaringType;
 

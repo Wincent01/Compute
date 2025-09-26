@@ -7,18 +7,20 @@ namespace Compute.IL.Compiler
 {
     public static class MethodDefinitionExtensions
     {
-        public static MethodInfo FindInfo(this MethodDefinition @this)
+        public static MethodBase FindInfo(this MethodDefinition @this)
         {
             var type = TypeHelper.Find(@this.DeclaringType.FullName);
 
-            MethodInfo info = default;
-            
-            foreach (var method in type.GetMethods().Where(m => m.Name == @this.Name))
+            MethodBase info = default;
+
+            MethodBase[] methods = @this.Name == ".ctor" ? type.GetConstructors() : type.GetMethods();
+
+            foreach (var method in methods.Where(m => m.Name == @this.Name))
             {
                 var param = method.GetParameters();
 
                 var found = true;
-                
+
                 for (var index = 0; index < param.Length; index++)
                 {
                     var parameterInfo = param[index];
@@ -28,11 +30,11 @@ namespace Compute.IL.Compiler
                         found = false;
                     }
                 }
-                
+
                 if (!found) continue;
 
                 info = method;
-                
+
                 break;
             }
 

@@ -60,7 +60,7 @@ namespace Compute.IL.Instructions
                     break;
                 case Code.Ldc_R4:
                     var f = Instruction.Operand.ToString();
-                    if (!f.Contains('.')) f = $"{f}.0";
+                    if (!f.Contains('.') && !f.Contains('E') && !f.Contains('e')) f = $"{f}.0";
                     Stack.Push($"(({typeof(float).CLString(Source)}) {f}f)");
                     break;
             }

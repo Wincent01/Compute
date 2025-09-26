@@ -44,6 +44,31 @@ namespace Compute.IL
         {
             return CompileDelegate(@delegate.Method, out code);
         }
+
+        /// <summary>
+        /// Compiles a kernel method into a type-safe wrapper that automatically manages SharedCollections
+        /// </summary>
+        /// <typeparam name="T">The delegate type matching the kernel method signature</typeparam>
+        /// <param name="delegate">The kernel method delegate</param>
+        /// <returns>A type-safe kernel wrapper</returns>
+        public TypeSafeKernel<T> CompileTypeSafe<T>(T @delegate) where T : Delegate
+        {
+            var kernelDelegate = Compile(@delegate);
+            return new TypeSafeKernel<T>(kernelDelegate, @delegate.Method, this);
+        }
+
+        /// <summary>
+        /// Compiles a kernel method into a type-safe wrapper with source code output
+        /// </summary>
+        /// <typeparam name="T">The delegate type matching the kernel method signature</typeparam>
+        /// <param name="delegate">The kernel method delegate</param>
+        /// <param name="code">Generated OpenCL source code</param>
+        /// <returns>A type-safe kernel wrapper</returns>
+        public TypeSafeKernel<T> CompileTypeSafe<T>(T @delegate, out string code) where T : Delegate
+        {
+            var kernelDelegate = Compile(@delegate, out code);
+            return new TypeSafeKernel<T>(kernelDelegate, @delegate.Method, this);
+        }
         
         public KernelDelegate CompileDelegate(MethodInfo method, out string code)
         {
@@ -76,7 +101,7 @@ namespace Compute.IL
 
                 program.Build();
 
-                var kernel = program.BuildKernel(method.Name);
+                var kernel = program.BuildKernel(method);
 
                 value = (workers, parameters) => KernelInvoker(source, parameters, kernel, workers);
 
@@ -92,9 +117,9 @@ namespace Compute.IL
             }
         }
 
-        private void KernelInvoker(ILSource source, UIntPtr[] parameters, Kernel kernel, WorkerDimensions workers)
+        private unsafe void KernelInvoker(ILSource source, UIntPtr[] parameters, Kernel kernel, WorkerDimensions workers)
         {
-            var values = new List<KernelArgument>();
+            Span<KernelArgument> values = stackalloc KernelArgument[parameters.Length];
 
             var method = source.Info;
 
@@ -107,31 +132,31 @@ namespace Compute.IL
 
                 if (info.IsArray)
                 {
-                    values.Add(new KernelArgument
+                    values[index] = new KernelArgument
                     {
                         Size = 8,
                         Value = parameter
-                    });
+                    };
 
                     continue;
                 }
 
-                values.Add(new KernelArgument
+                values[index] = new KernelArgument
                 {
                     Size = (uint) Marshal.SizeOf(info),
                     Value = parameter
-                });
+                };
             }
 
             lock (kernel)
             {
-                kernel.Invoke(workers, values.ToArray());
+                kernel.InvokeAuto(workers, values);
             }
         }
 
-        public ILSource Compile(MethodInfo info) => Compile<ILSource>(info);
+        public ILSource Compile(MethodBase info) => Compile<ILSource>(info);
 
-        public T Compile<T>(MethodInfo info) where T : ILSource, new()
+        public T Compile<T>(MethodBase info) where T : ILSource, new()
         {
             var source = Code.OfType<T>().FirstOrDefault(
                 s => s.Info.Equals(info)

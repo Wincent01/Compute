@@ -2,7 +2,7 @@ using System;
 
 namespace Compute
 {
-    public class KernelArgument
+    public struct KernelArgument
     {
         public UIntPtr Value { get; set; }
         

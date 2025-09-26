@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
+using Compute.IL.Compiler;
 using Silk.NET.OpenCL;
 
 namespace Compute
@@ -83,6 +85,12 @@ namespace Compute
             throw new Exception($"Failed to build device program!\nError: [{error}]\nMessage: {str}");
         }
 
+
+        public Kernel BuildKernel(MethodInfo method)
+        {
+            return BuildKernel(CLGenerator.GenerateKernelName(method));
+        }
+
         public Kernel BuildKernel(string name)
         {
             var kernel = Kernels.FirstOrDefault(k => k.Name == name);
@@ -92,11 +100,11 @@ namespace Compute
                 return kernel;
             }
 
-            var result = Bindings.OpenCl.CreateKernel(Handle, name, Span<int>.Empty);
+            var result = Bindings.OpenCl.CreateKernel(Handle, name, out var error);
 
             if (result == IntPtr.Zero)
             {
-                throw new Exception("Failed to create compute kernel!");
+                throw new Exception($"Failed to create compute kernel!\nError: [{(ErrorCodes)error}]");
             }
 
             kernel = new Kernel(this, result, name);

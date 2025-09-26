@@ -216,6 +216,29 @@ namespace Compute
             return result;
         }
 
+        public unsafe void ReadBufferNonAlloc<T>(IntPtr buffer, Span<T> data, uint size, uint offset) where T : unmanaged
+        {
+            fixed (T* dataPtr = data)
+            {
+                var error = (ErrorCodes) Bindings.OpenCl.EnqueueReadBuffer(
+                    Queue,
+                    buffer,
+                    true,
+                    (UIntPtr) offset,
+                    (UIntPtr) (size * Marshal.SizeOf<T>()),
+                    dataPtr,
+                    0,
+                    null,
+                    null
+                );
+
+                if (error != ErrorCodes.Success)
+                {
+                    throw new Exception("Failed to read device memory!");
+                }
+            }
+        }
+
         public void FinishQueue()
         {
             Bindings.OpenCl.Finish(Queue);

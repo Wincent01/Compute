@@ -122,7 +122,13 @@ namespace Compute.Samples
                     PrintDetails(entry);
                     
                     // Demonstrate multi-dimensional worker support
-                    MultiDimensionalExample.RunMultiDimensionalExamples(entry);
+                    //MultiDimensionalExample.RunMultiDimensionalExamples(entry);
+
+                    // Demonstrate type-safe kernel wrapper
+                    //TypeSafeKernelExample.RunTypeSafeExamples(entry);
+
+                    // Demonstrate N-body simulation
+                    NBodySimulation.RunNBodyExample(entry);
 
                     //RunAccelerator(entry);
                 }
@@ -148,7 +154,7 @@ namespace Compute.Samples
 
             File.WriteAllText("kernel.cl", source); // Save source for debugging
 
-            const int size = 1024 * 100;
+            const int size = 1024 * 1000;
             const int rounds = 25;
 
             var random = new Random();
@@ -157,13 +163,13 @@ namespace Compute.Samples
             var totalGpu = 0L;
             var totalCpu = 0L;
 
+            var data = new Matrix4x4[size];
+
             var results = new Matrix4x4[size];
 
-            var data = new Matrix4x4[size];
-            
-            using var input = new SharedCollection<Matrix4x4>(context, data, true);
+            using var input = new SharedCollection<Matrix4x4>(context, size);
 
-            using var output = new SharedCollection<Matrix4x4>(context, results, true);
+            using var output = new SharedCollection<Matrix4x4>(context, size);
 
             for (var j = 0; j < rounds; j++)
             {
@@ -188,8 +194,12 @@ namespace Compute.Samples
                 }
 
                 watch.Restart();
+
+                input.CopyToDevice(data);
                 
-                ilKernel.Invoke(new WorkerDimensions(size), input.UPtr, output.UPtr, (UIntPtr) size);
+                ilKernel(size, input, output, size);
+
+                output.CopyToHostNonAlloc(results);
 
                 var gpu = watch.ElapsedMilliseconds;
 

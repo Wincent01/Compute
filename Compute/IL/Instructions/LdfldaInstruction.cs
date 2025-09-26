@@ -16,7 +16,7 @@ namespace Compute.IL.Instructions
 
             var pointer = str.StartsWith("&(");
 
-            Stack.Push($"(&(({instance}){(pointer ? "->" : ".")}{field.Name}))");
+            Stack.Push($"&(({instance}){(pointer ? "->" : ".")}{field.Name})");
 
             return "";
         }

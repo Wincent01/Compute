@@ -3,7 +3,7 @@ using Mono.Cecil.Cil;
 
 namespace Compute.IL.Instructions
 {
-    [Instruction(Code.Clt)]
+    [Instruction(Code.Clt, Code.Clt_Un)]
     public class CltInstruction : InstructionBase
     {
         public override string Compile()

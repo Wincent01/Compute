@@ -44,20 +44,25 @@ namespace Compute.Memory
             }
         }
 
-        public Span<T> ReadCollection()
+        public Span<T> CopyToHost()
         {
             Stream.Position = 0;
 
             return Stream.Read<T>(Length);
         }
 
-        public void WriteCollection(IEnumerable<T> enumerable)
+        public void CopyToHostNonAlloc(Span<T> data)
+        {
+            Stream.Position = 0;
+
+            Stream.ReadNonAlloc(data, Length);
+        }
+
+        public void CopyToDevice(Span<T> enumerable)
         {
             Stream.Position = default;
 
-            var array = enumerable.ToArray();
-
-            Stream.Write(new Span<T>(array));
+            Stream.Write(enumerable);
         }
 
         public IEnumerator<T> GetEnumerator()
@@ -89,6 +94,11 @@ namespace Compute.Memory
 
                 Stream.Write(value);
             }
+        }
+
+        public static implicit operator UIntPtr(SharedCollection<T> collection)
+        {
+            return collection.UPtr;
         }
 
         public void Dispose()
