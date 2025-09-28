@@ -75,6 +75,10 @@ namespace Compute.IL.AST
             {
                 return new StructAstType(type);
             }
+            else if (type.IsClass || type.IsInterface)
+            {
+                return new ClassAstType(type);
+            }
             else
             {
                 throw new NotSupportedException($"Unsupported CLR type: {type.FullName}");
@@ -197,6 +201,30 @@ namespace Compute.IL.AST
         public override string ToString()
         {
             return ClrType?.Name ?? "UnknownStruct";
+        }
+    }
+
+    /// <summary>
+    /// Represents a class type
+    /// </summary>
+    public class ClassAstType : AstType
+    {
+        public override bool IsStruct => true;
+
+        public ClassAstType(Type clrType) : base(clrType)
+        {
+            if (!clrType.IsClass && !clrType.IsInterface)
+                throw new ArgumentException("Type must be a class or interface", nameof(clrType));
+        }
+
+        public override string ToOpenClString()
+        {
+            return ClrType?.Name ?? "UnknownClass";
+        }
+
+        public override string ToString()
+        {
+            return ClrType?.Name ?? "UnknownClass";
         }
     }
 }

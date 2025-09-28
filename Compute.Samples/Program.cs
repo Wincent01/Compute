@@ -8,6 +8,7 @@ using System.Numerics;
 using Compute.IL;
 using Compute.IL.AST;
 using Compute.IL.AST.CodeGeneration;
+using Compute.IL.AST.Lambda;
 using Compute.IL.AST.Statements;
 using Compute.Memory;
 
@@ -158,7 +159,7 @@ namespace Compute.Samples
                     //TypeSafeKernelExample.RunTypeSafeExamples(entry);
 
                     // Demonstrate N-body simulation
-                    NBodySimulation.RunNBodyExample(entry);
+                    //NBodySimulation.RunNBodyExample(entry);
 
                     RunAccelerator(entry);
                 }
@@ -166,6 +167,7 @@ namespace Compute.Samples
                 Console.WriteLine($"Done with: {platform.Name}");
             }
         }
+        
         public static void RunAccelerator(Accelerator accelerator)
         {
             using var context = accelerator.CreateContext();
@@ -174,6 +176,30 @@ namespace Compute.Samples
             watch.Start();
 
             var astProgram = new AstProgram(context, new OpenClCodeGenerator());
+
+            uint p = 100;
+
+            var sharedArray = new Float4[p];
+
+            using var parallel = new Parallel(context, p, () =>
+            {
+                var i = BuiltIn.GetGlobalId(0);
+
+                if (i >= p) return;
+
+                BuiltIn.Print("Hello from thread %d", i);
+
+                sharedArray[i] = new Float4
+                {
+                    X = i,
+                    Y = i * 2,
+                    Z = i * 3,
+                    W = i * 4
+                };
+            });
+
+            Console.WriteLine("Shared array contents: ");
+            Console.WriteLine(string.Join(", ", sharedArray));
 
             var astKernel = astProgram.Compile(ExampleKernel, out string source);
 
@@ -229,7 +255,7 @@ namespace Compute.Samples
                 watch.Restart();
 
                 input.CopyToDevice(data);
-                
+
                 astKernel(size, input, output, size);
 
                 output.CopyToHostNonAlloc(results);
@@ -237,7 +263,7 @@ namespace Compute.Samples
                 var gpu = watch.ElapsedMilliseconds;
 
                 watch.Restart();
-                
+
                 for (var i = 0; i < size; i++)
                 {
                     var value = data[i];

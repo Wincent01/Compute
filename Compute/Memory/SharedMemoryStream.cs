@@ -127,6 +127,64 @@ namespace Compute.Memory
             Position += count;
         }
 
+        /// <summary>
+        /// Writes an array of any unmanaged type to the device memory using reflection.
+        /// </summary>
+        /// <param name="array">The array to write to device memory</param>
+        /// <param name="elementType">The element type of the array</param>
+        public void WriteArrayGeneric(Array array, Type elementType)
+        {
+            var originalPosition = Position;
+            Position = 0;
+            
+            // Use reflection to call the generic method for any unmanaged type
+            var writeMethod = typeof(SharedMemoryStream).GetMethod(nameof(WriteArrayGenericTyped), 
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            
+            if (writeMethod == null)
+                throw new InvalidOperationException("WriteArrayGenericTyped method not found.");
+                
+            var genericMethod = writeMethod.MakeGenericMethod(elementType);
+            genericMethod.Invoke(this, new object[] { array });
+            
+            Position = originalPosition;
+        }
+        
+        /// <summary>
+        /// Reads data from device memory back into an array of any unmanaged type using reflection.
+        /// </summary>
+        /// <param name="array">The array to read data into</param>
+        /// <param name="elementType">The element type of the array</param>
+        public void ReadArrayGeneric(Array array, Type elementType)
+        {
+            var originalPosition = Position;
+            Position = 0;
+            
+            // Use reflection to call the generic method for any unmanaged type
+            var readMethod = typeof(SharedMemoryStream).GetMethod(nameof(ReadArrayGenericTyped), 
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            
+            if (readMethod == null)
+                throw new InvalidOperationException("ReadArrayGenericTyped method not found.");
+                
+            var genericMethod = readMethod.MakeGenericMethod(elementType);
+            genericMethod.Invoke(this, new object[] { array });
+            
+            Position = originalPosition;
+        }
+        
+        private void WriteArrayGenericTyped<T>(Array array) where T : unmanaged
+        {
+            var typedArray = (T[])array;
+            Write(new Span<T>(typedArray));
+        }
+        
+        private void ReadArrayGenericTyped<T>(Array array) where T : unmanaged
+        {
+            var typedArray = (T[])array;
+            ReadNonAlloc(new Span<T>(typedArray), typedArray.Length);
+        }
+
         public override void Close()
         {
             Context.ReleaseBuffer(Handle);

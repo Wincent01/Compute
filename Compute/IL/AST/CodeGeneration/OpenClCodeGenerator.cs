@@ -32,11 +32,57 @@ namespace Compute.IL.AST.CodeGeneration
                 PointerAstType pointer => $"{GenerateType(pointer.ElementType)}*",
                 ArrayAstType array => $"{GenerateType(array.ElementType)}*", // Arrays as pointers in OpenCL
                 StructAstType structType => $"{GenerateStructName(structType.ClrType!)}",
+                ClassAstType classType => $"{GenerateStructName(classType.ClrType!)}",
                 _ => throw new NotSupportedException($"Type {type} not supported")
             };
         }
 
-        private object GenerateStructName(Type type)
+        public string GenerateType(Type type)
+        {
+            if (type.IsPointer)
+            {
+                var elementType = type.GetElementType();
+                if (elementType == null)
+                    throw new InvalidOperationException($"Unable to get element type of pointer type {type}");
+
+                return $"{GenerateType(elementType)}*";
+            }
+            else if (type.IsArray)
+            {
+                var elementType = type.GetElementType();
+                if (elementType == null)
+                    throw new InvalidOperationException($"Unable to get element type of array type {type}");
+
+                return $"{GenerateType(elementType)}*"; // Arrays as pointers in OpenCL
+            }
+            else if (type.IsPrimitive || type == typeof(void))
+            {
+                return GeneratePrimitiveType(AstType.FromClrType(type) as PrimitiveAstType ?? throw new InvalidOperationException($"Unable to convert {type} to PrimitiveAstType"));
+            }
+            else
+            {
+                return $"{GenerateStructName(type)}";
+            }
+        }
+
+        private static string SanitizeIdentifier(string name)
+        {
+            var sanitized = new StringBuilder();
+            foreach (var ch in name)
+            {
+                if (char.IsLetterOrDigit(ch) || ch == '_')
+                {
+                    sanitized.Append(ch);
+                }
+                else
+                {
+                    sanitized.Append('_');
+                }
+            }
+            return sanitized.ToString();
+        }
+
+        public string GenerateStructName(Type type)
         {
             var attributes = type.GetCustomAttributes();
 
@@ -51,13 +97,13 @@ namespace Compute.IL.AST.CodeGeneration
                 }
             }
 
-            return $"{type.Name}_{type.MetadataToken}";
+            return $"{SanitizeIdentifier(type.Name)}_{type.MetadataToken}";
         }
 
         public string GenerateFunctionName(AstMethodSource methodSource)
         {
             // Use the same kernel naming convention as the old system
-            return $"{methodSource.Method.Name}_method_{methodSource.Method.MetadataToken}";
+            return $"{SanitizeIdentifier(methodSource.Method.Name)}_method_{methodSource.Method.MetadataToken}";
         }
 
         public string GenerateFunctionName(MethodReference methodSource)
@@ -385,6 +431,12 @@ namespace Compute.IL.AST.CodeGeneration
 
             // Parameters
             builder.Append('(');
+
+            if (methodSource.Method.DeclaringType != null && !methodSource.Method.IsStatic)
+            {
+                builder.Append($"{GenerateType(AstType.FromClrType(methodSource.Method.DeclaringType!))}* this");
+            }
+
             var parameters = methodSource.Method.GetParameters();
             for (int i = 0; i < parameters.Length; i++)
             {

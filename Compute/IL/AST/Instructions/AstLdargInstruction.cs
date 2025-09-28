@@ -47,26 +47,34 @@ namespace Compute.IL.AST.Instructions
 
             var parameters = method.GetParameters();
 
-            if (index < Definition.Parameters.Count)
+            if (Definition.HasThis)
             {
-                var param = Definition.Parameters[index];
+                if (index == 0)
+                    return new PointerAstType(AstType.FromClrType(method.DeclaringType!));
 
-                var clrType = TypeHelper.Find(param.ParameterType.Resolve());
-
-                if (clrType == null)
-                    throw new InvalidOperationException($"Unable to resolve type for parameter {param.Name} in method {Definition.FullName}");
-
-                var type = AstType.FromClrType(clrType);
-
-                var isByValue = parameters[index].GetCustomAttributes(typeof(ByValueAttribute), false).Length > 0;
-
-                if (type.IsStruct && !type.IsPrimitive && !isByValue)
-                {
-                    return new PointerAstType(type);
-                }
-
-                return type;
+                index -= 1;
             }
+
+            if (index < Definition.Parameters.Count)
+                {
+                    var param = Definition.Parameters[index];
+
+                    var clrType = TypeHelper.Find(param.ParameterType.Resolve());
+
+                    if (clrType == null)
+                        throw new InvalidOperationException($"Unable to resolve type for parameter {param.Name} in method {Definition.FullName}");
+
+                    var type = AstType.FromClrType(clrType);
+
+                    var isByValue = parameters[index].GetCustomAttributes(typeof(ByValueAttribute), false).Length > 0;
+
+                    if (type.IsStruct && !type.IsPrimitive && !isByValue)
+                    {
+                        return new PointerAstType(type);
+                    }
+
+                    return type;
+                }
             
             throw new InvalidOperationException($"Invalid argument index {index} for method {Definition.FullName}");
         }
