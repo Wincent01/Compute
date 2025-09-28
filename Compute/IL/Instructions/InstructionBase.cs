@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Compute.IL.Compiler;
+using Compute.IL.Utility;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 

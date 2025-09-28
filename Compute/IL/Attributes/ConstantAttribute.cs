@@ -1,0 +1,10 @@
+using System;
+
+namespace Compute.IL
+{
+    [AttributeUsage(AttributeTargets.Parameter)]
+    public class ConstantAttribute : Attribute
+    {
+        
+    }
+}

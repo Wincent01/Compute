@@ -6,6 +6,9 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 using Compute.IL;
+using Compute.IL.AST;
+using Compute.IL.AST.CodeGeneration;
+using Compute.IL.AST.Statements;
 using Compute.Memory;
 
 namespace Compute.Samples
@@ -76,6 +79,18 @@ namespace Compute.Samples
             output[id] = matrix;
         }
 
+        // Simple kernel for AST demonstration
+        [Kernel]
+        public static void SimpleAstKernel([Global] float[] input, [Global] float[] output, [Const] uint count)
+        {
+            var id = CLFunctions.GetGlobalId(0);
+            
+            if (id >= count) return;
+            
+            var value = input[id];
+            output[id] = value * 2.0f + 1.0f;
+        }
+
         private static void PrintDetails<T>(T instance)
         {
             foreach (var property in typeof(T).GetProperties())
@@ -121,6 +136,9 @@ namespace Compute.Samples
                 {
                     PrintDetails(entry);
                     
+                    // Demonstrate AST-based compilation alongside traditional approach
+                    //DemonstrateAstVsTraditional(entry);
+
                     // Demonstrate multi-dimensional worker support
                     //MultiDimensionalExample.RunMultiDimensionalExamples(entry);
 
@@ -128,15 +146,14 @@ namespace Compute.Samples
                     //TypeSafeKernelExample.RunTypeSafeExamples(entry);
 
                     // Demonstrate N-body simulation
-                    NBodySimulation.RunNBodyExample(entry);
+                    //NBodySimulation.RunNBodyExample(entry);
 
-                    //RunAccelerator(entry);
+                    RunAccelerator(entry);
                 }
 
                 Console.WriteLine($"Done with: {platform.Name}");
             }
         }
-
         public static void RunAccelerator(Accelerator accelerator)
         {
             using var context = accelerator.CreateContext();
@@ -144,15 +161,19 @@ namespace Compute.Samples
             var watch = new Stopwatch();
             watch.Start();
 
-            var ilProgram = new ILProgram(context);
+            var astProgram = new AstProgram(context, new OpenClCodeGenerator());
 
-            var ilKernel = ilProgram.Compile(ExampleKernel);
-
-            Console.WriteLine($"Compile kernel: {watch.ElapsedMilliseconds}ms");
-
-            var source = ilProgram.CompleteSource(ilProgram.Kernels.First());
+            var astKernel = astProgram.Compile(ExampleKernel, out string source);
 
             File.WriteAllText("kernel.cl", source); // Save source for debugging
+
+            if (astKernel == null)
+            {
+                Console.WriteLine("AST compilation failed - aborting test");
+                return;
+            }
+
+            Console.WriteLine($"Compile kernel: {watch.ElapsedMilliseconds}ms");
 
             const int size = 1024 * 1000;
             const int rounds = 25;
@@ -197,7 +218,7 @@ namespace Compute.Samples
 
                 input.CopyToDevice(data);
                 
-                ilKernel(size, input, output, size);
+                astKernel(size, input, output, size);
 
                 output.CopyToHostNonAlloc(results);
 

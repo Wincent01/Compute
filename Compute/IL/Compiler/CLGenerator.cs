@@ -2,6 +2,7 @@ using System;
 using System.Numerics;
 using System.Reflection;
 using System.Text;
+using Compute.IL.Utility;
 
 namespace Compute.IL.Compiler
 {

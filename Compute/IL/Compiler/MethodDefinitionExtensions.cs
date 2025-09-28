@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Reflection;
+using Compute.IL.Utility;
 using Mono.Cecil;
 
 namespace Compute.IL.Compiler

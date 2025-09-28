@@ -1,4 +1,5 @@
 using System;
+using Compute.IL.Utility;
 using Mono.Cecil;
 
 namespace Compute.IL.Compiler
