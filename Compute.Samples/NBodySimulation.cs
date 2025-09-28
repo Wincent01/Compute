@@ -1,7 +1,10 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using Compute.IL;
+using Compute.IL.AST;
+using Compute.IL.AST.CodeGeneration;
 using Compute.Memory;
 
 namespace Compute.Samples
@@ -12,55 +15,18 @@ namespace Compute.Samples
         public const float SOFTENING = 1e-9f; // Softening parameter to avoid singularities
     }
 
-    public struct Vector3
-    {
-        public float X;
-        public float Y;
-        public float Z;
 
-        public static Vector3 operator +(Vector3 a, Vector3 b)
-        {
-            var result = new Vector3();
-            result.X = a.X + b.X;
-            result.Y = a.Y + b.Y;
-            result.Z = a.Z + b.Z;
-            return result;
-        }
-
-        public static Vector3 operator -(Vector3 a, Vector3 b)
-        {
-            var result = new Vector3();
-            result.X = a.X - b.X;
-            result.Y = a.Y - b.Y;
-            result.Z = a.Z - b.Z;
-            return result;
-        }
-
-        public static Vector3 operator *(Vector3 a, float s)
-        {
-            var result = new Vector3();
-            result.X = a.X * s;
-            result.Y = a.Y * s;
-            result.Z = a.Z * s;
-            return result;
-        }
-
-        public float LengthSquared()
-        {
-            return X * X + Y * Y + Z * Z;
-        }
-
-        public float Length()
-        {
-            return CLFunctions.Sqrt(LengthSquared());
-        }
-    }
-
+    [StructLayout(LayoutKind.Explicit, Size = 48)]
     public struct Body
     {
+        [FieldOffset(0)]
         public float Mass;
-        public Vector3 Position;
-        public Vector3 Velocity;
+
+        [FieldOffset(16)]
+        public Float3 Position;
+
+        [FieldOffset(32)]
+        public Float3 Velocity;
     }
 
     public static class NBodySimulation
@@ -68,15 +34,28 @@ namespace Compute.Samples
         [Kernel]
         public static void Simulate([Global] Body[] inBodies, [Global] Body[] outBodies, [Const] uint bodyCount, [Const] float deltaTime)
         {
-            var id = CLFunctions.GetGlobalId(0);
+            var id = BuiltIn.GetGlobalId(0);
             if (id >= bodyCount) return;
 
             var body = inBodies[id];
 
+            /*
+            BuiltIn.Print("Id %i", id);
+            BuiltIn.Print("Len %i", BuiltIn.SizeOf(body));
+            BuiltIn.Print("Mass %f", body.Mass);
+            BuiltIn.Print("Px %f", body.Position.X);
+            BuiltIn.Print("Py %f", body.Position.Y);
+            BuiltIn.Print("Pz %f", body.Position.Z);
+            BuiltIn.Print("Vx %f", body.Velocity.X);
+            BuiltIn.Print("Vy %f", body.Velocity.Y);
+            BuiltIn.Print("Vz %f", body.Velocity.Z);
+            */
+
             // Initialize force to zero
-            float forceX = 0.0f;
-            float forceY = 0.0f;
-            float forceZ = 0.0f;
+            Float3 force;
+            force.X = 0.0f;
+            force.Y = 0.0f;
+            force.Z = 0.0f;
 
             // Calculate gravitational forces from all other bodies
             var count = (int)bodyCount;
@@ -85,36 +64,28 @@ namespace Compute.Samples
                 if (j == id) continue; // Skip self
 
                 var other = inBodies[j];
-                
+
                 // Calculate distance vector
-                var rX = other.Position.X - body.Position.X;
-                var rY = other.Position.Y - body.Position.Y;
-                var rZ = other.Position.Z - body.Position.Z;
-                
+                Float3 r = other.Position - body.Position;
+
                 // Calculate distance squared with softening
-                var distanceSq = rX * rX + rY * rY + rZ * rZ + Constants.SOFTENING;
-                var distance = CLFunctions.Sqrt(distanceSq);
-                
+                var distanceSq = r.X * r.X + r.Y * r.Y + r.Z * r.Z + Constants.SOFTENING;
+                var distance = BuiltIn.Sqrt(distanceSq);
+
                 // Calculate force magnitude
                 var forceMagnitude = Constants.G * body.Mass * other.Mass / distanceSq;
-                
+
                 // Add force components (unit vector * force magnitude)
                 var invDistance = 1.0f / distance;
-                forceX = forceX + (rX * invDistance * forceMagnitude);
-                forceY = forceY + (rY * invDistance * forceMagnitude);
-                forceZ = forceZ + (rZ * invDistance * forceMagnitude);
+                force = force + (r * invDistance * forceMagnitude);
             }
 
             // Update velocity using F = ma -> a = F/m
             var invMass = 1.0f / body.Mass;
-            body.Velocity.X = body.Velocity.X + (forceX * invMass * deltaTime);
-            body.Velocity.Y = body.Velocity.Y + (forceY * invMass * deltaTime);
-            body.Velocity.Z = body.Velocity.Z + (forceZ * invMass * deltaTime);
+            body.Velocity = body.Velocity + (force * invMass * deltaTime);
 
             // Update position using v = dx/dt -> dx = v * dt
-            body.Position.X = body.Position.X + (body.Velocity.X * deltaTime);
-            body.Position.Y = body.Position.Y + (body.Velocity.Y * deltaTime);
-            body.Position.Z = body.Position.Z + (body.Velocity.Z * deltaTime);
+            body.Position = body.Position + (body.Velocity * deltaTime);
 
             outBodies[id] = body;
         }
@@ -149,7 +120,7 @@ namespace Compute.Samples
                     
                     // Calculate distance squared with softening
                     var distanceSq = rX * rX + rY * rY + rZ * rZ + Constants.SOFTENING;
-                    var distance = (float)Math.Sqrt(distanceSq);
+                    var distance = MathF.Sqrt(distanceSq);
                     
                     // Calculate force magnitude
                     var forceMagnitude = Constants.G * body.Mass * other.Mass / distanceSq;
@@ -184,7 +155,7 @@ namespace Compute.Samples
             Console.WriteLine($"\n=== N-Body Simulation on {accelerator.Name} ===");
 
             using var context = accelerator.CreateContext();
-            var ilProgram = new ILProgram(context);
+            var ilProgram = new AstProgram(context, new OpenClCodeGenerator());
 
             // Compile the kernel
             var watch = Stopwatch.StartNew();
@@ -196,7 +167,7 @@ namespace Compute.Samples
             watch.Stop();
             Console.WriteLine($"Kernel compilation: {watch.ElapsedMilliseconds}ms");
 
-            const int bodyCount = 1024;
+            const int bodyCount = 100;
             const float deltaTime = 1000f;
             const int timeSteps = 1000;
 
@@ -206,13 +177,13 @@ namespace Compute.Samples
             
             for (var i = 0; i < bodyCount; i++)
             {
-                var position = new Vector3 {
+                var position = new Float3 {
                     X = (random.NextSingle() - 0.5f) * 1e11f, // Random position in range [-5e10, 5e10]
                     Y = (random.NextSingle() - 0.5f) * 1e11f,
                     Z = (random.NextSingle() - 0.5f) * 1e11f
                 };
 
-                var velocity = new Vector3 {
+                var velocity = new Float3 {
                     X = (random.NextSingle() - 0.5f) * 1e4f, // Random velocity in range [-5e3, 5e3]
                     Y = (random.NextSingle() - 0.5f) * 1e4f,
                     Z = (random.NextSingle() - 0.5f) * 1e4f
@@ -238,12 +209,12 @@ namespace Compute.Samples
             using var outputBuffer = new SharedCollection<Body>(context, bodyCount);
 
             watch.Restart();
-            
+
             for (var step = 0; step < timeSteps; step++)
             {
                 inputBuffer.CopyToDevice(gpuBodies);
                 var deltaTimeAsUInt = BitConverter.SingleToUInt32Bits(deltaTime);
-                kernel(bodyCount, inputBuffer, outputBuffer, (uint)bodyCount, (UIntPtr)deltaTimeAsUInt);
+                kernel(bodyCount, inputBuffer, outputBuffer, bodyCount, deltaTimeAsUInt);
                 outputBuffer.CopyToHostNonAlloc(gpuBodies);
             }
             
@@ -253,7 +224,7 @@ namespace Compute.Samples
 
             // CPU simulation
             watch.Restart();
-            
+
             for (var step = 0; step < timeSteps; step++)
             {
                 SimulateCPU(cpuBodies, tempBodies, deltaTime);

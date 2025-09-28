@@ -104,6 +104,16 @@ namespace Compute.IL.AST
                 }
             }
 
+            // Remove labels that are not referenced by any jumps
+            var referencedLabels = new HashSet<int>();
+
+            foreach (var stmt in statements.OfType<BranchStatement>())
+            {
+                referencedLabels.Add(stmt.TargetOffset);
+            }
+
+            statements = [.. statements.Where(s => s is not LabelStatement labelStmt || referencedLabels.Contains(labelStmt.Offset))];
+
             // Create a block statement containing all the method statements
             var block = new BlockStatement(statements);
 

@@ -85,6 +85,75 @@ namespace Compute
             throw new Exception($"Failed to build device program!\nError: [{error}]\nMessage: {str}");
         }
 
+        /// <summary>
+        /// Gets the OpenCL build options used to compile the program
+        /// </summary>
+        /// <returns>Build options string</returns>
+        public unsafe string GetBuildOptions()
+        {
+            var buffer = new byte[1024];
+            var length = new UIntPtr[1];
+
+            var error = (ErrorCodes) Bindings.OpenCl.GetProgramBuildInfo(Handle,
+                Context.Accelerator.Handle,
+                ProgramBuildInfo.BuildOptions,
+                (UIntPtr) buffer.Length,
+                new Span<byte>(buffer),
+                new Span<UIntPtr>(length)
+            );
+
+            if (error != ErrorCodes.Success)
+                throw new Exception($"Failed to get build options: {error}");
+
+            Array.Resize(ref buffer, (int) length[0]);
+            return new string(buffer.Select(b => (char) b).ToArray()).Replace("\0", "");
+        }
+
+        /// <summary>
+        /// Gets the build status for the program
+        /// </summary>
+        /// <returns>Build status</returns>
+        public unsafe BuildStatus GetBuildStatus()
+        {
+            var status = new int[1];
+
+            var error = (ErrorCodes) Bindings.OpenCl.GetProgramBuildInfo(Handle,
+                Context.Accelerator.Handle,
+                ProgramBuildInfo.BuildStatus,
+                (UIntPtr) sizeof(int),
+                new Span<int>(status),
+                Span<UIntPtr>.Empty
+            );
+
+            if (error != ErrorCodes.Success)
+                throw new Exception($"Failed to get build status: {error}");
+
+            return (BuildStatus)status[0];
+        }
+
+        /// <summary>
+        /// Gets the build log for the program (useful for debugging)
+        /// </summary>
+        /// <returns>Build log string</returns>
+        public unsafe string GetBuildLog()
+        {
+            var buffer = new byte[2048];
+            var length = new UIntPtr[1];
+
+            var error = (ErrorCodes) Bindings.OpenCl.GetProgramBuildInfo(Handle,
+                Context.Accelerator.Handle,
+                ProgramBuildInfo.BuildLog,
+                (UIntPtr) buffer.Length,
+                new Span<byte>(buffer),
+                new Span<UIntPtr>(length)
+            );
+
+            if (error != ErrorCodes.Success)
+                throw new Exception($"Failed to get build log: {error}");
+
+            Array.Resize(ref buffer, (int) length[0]);
+            return new string(buffer.Select(b => (char) b).ToArray()).Replace("\0", "");
+        }
 
         public Kernel BuildKernel(MethodInfo method)
         {

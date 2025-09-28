@@ -15,7 +15,7 @@ namespace Compute.Samples
 {
     internal static class Program
     {
-        public static Matrix4x4 Multiply(Matrix4x4 value1, Matrix4x4 value2)
+        public static Matrix4x4 Multiply([ByValue] Matrix4x4 value1, [ByValue] Matrix4x4 value2)
         {
             Matrix4x4 m;
 
@@ -65,7 +65,19 @@ namespace Compute.Samples
         [Kernel]
         public static void ExampleKernel([Global] Matrix4x4[] input, [Global] Matrix4x4[] output, [Const] uint count)
         {
-            var id = CLFunctions.GetGlobalId(0);
+            Float4 value = new Float4();
+            value.X = 1.0f;
+            value.Y = 2.0f;
+            value.Z = 3.0f;
+            value.W = 4.0f;
+
+            value.X += value.Y;
+
+            var val2 = value.WZYX;
+            
+            value *= val2;
+
+            var id = BuiltIn.GetGlobalId(0);
 
             if (id >= count) return;
 
@@ -83,7 +95,7 @@ namespace Compute.Samples
         [Kernel]
         public static void SimpleAstKernel([Global] float[] input, [Global] float[] output, [Const] uint count)
         {
-            var id = CLFunctions.GetGlobalId(0);
+            var id = BuiltIn.GetGlobalId(0);
             
             if (id >= count) return;
             
@@ -146,7 +158,7 @@ namespace Compute.Samples
                     //TypeSafeKernelExample.RunTypeSafeExamples(entry);
 
                     // Demonstrate N-body simulation
-                    //NBodySimulation.RunNBodyExample(entry);
+                    NBodySimulation.RunNBodyExample(entry);
 
                     RunAccelerator(entry);
                 }

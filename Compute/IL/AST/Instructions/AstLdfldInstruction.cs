@@ -25,9 +25,23 @@ namespace Compute.IL.AST.Instructions
             if (fieldType == null)
                 throw new System.Exception($"Field type {fieldDef.FieldType.FullName} could not be resolved");
 
+            var declearingType = TypeHelper.Find(fieldReference.DeclaringType.Resolve());
+
+            if (declearingType == null)
+                throw new System.Exception($"Declaring type {fieldReference.DeclaringType.FullName} could not be resolved");
+
+            var field = declearingType.GetField(fieldReference.Name, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Static);
+
+            if (field == null)
+                throw new System.Exception($"Field {fieldReference.Name} not found in type {declearingType.FullName}");
+
+            TypeDependencies.Add(fieldType);
+
+            var aliasAttributes = field.GetCustomAttributes(typeof(AliasAttribute), false);
+
             var instance = ExpressionStack.Pop();
 
-            var fieldAccess = new FieldAccessExpression(instance, fieldReference.Name, AstType.FromClrType(fieldType));
+            var fieldAccess = new FieldAccessExpression(instance, aliasAttributes.Length > 0 ? (aliasAttributes[0] as AliasAttribute)!.Alias : fieldReference.Name, AstType.FromClrType(fieldType));
 
             ExpressionStack.Push(fieldAccess);
             

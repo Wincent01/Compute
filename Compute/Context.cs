@@ -170,12 +170,14 @@ namespace Compute
 
             fixed (T* dataPtr = data)
             {
+                var structLength = Marshal.SizeOf<T>();
+
                 var error = (ErrorCodes) Bindings.OpenCl.EnqueueWriteBuffer(
                     Queue,
                     buffer,
                     true,
                     (UIntPtr) offset,
-                    (UIntPtr) (data.Length * Marshal.SizeOf<T>()),
+                    (UIntPtr) (data.Length * structLength),
                     dataPtr,
                     0,
                     null,

@@ -19,8 +19,8 @@ namespace Compute.Samples
         [Kernel]
         public static void MatrixMultiply2D([Global] float[] a, [Global] float[] b, [Global] float[] result, [Const] uint width, [Const] uint height)
         {
-            var x = CLFunctions.GetGlobalId(0);
-            var y = CLFunctions.GetGlobalId(1);
+            var x = BuiltIn.GetGlobalId(0);
+            var y = BuiltIn.GetGlobalId(1);
             
             if (x >= width || y >= height) return;
             
@@ -31,9 +31,9 @@ namespace Compute.Samples
         [Kernel]
         public static void Process3D([Global] float[] data, [Global] float[] output, [Const] uint width, [Const] uint height, [Const] uint depth)
         {
-            var x = CLFunctions.GetGlobalId(0);
-            var y = CLFunctions.GetGlobalId(1);
-            var z = CLFunctions.GetGlobalId(2);
+            var x = BuiltIn.GetGlobalId(0);
+            var y = BuiltIn.GetGlobalId(1);
+            var z = BuiltIn.GetGlobalId(2);
             
             if (x >= width || y >= height || z >= depth) return;
             
@@ -44,7 +44,7 @@ namespace Compute.Samples
         [Kernel]
         public static void Simple1D([Global] float[] input, [Global] float[] output, [Const] uint count)
         {
-            var id = CLFunctions.GetGlobalId(0);
+            var id = BuiltIn.GetGlobalId(0);
             
             if (id >= count) return;
             

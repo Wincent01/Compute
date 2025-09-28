@@ -88,7 +88,7 @@ namespace Compute.IL.AST
                 program.Build();
 
                 var kernel = program.BuildKernel(method);
-                KernelDelegate kernelDelegate = (workers, parameters) => KernelInvoker(kernelSource, parameters, kernel, workers);
+                void kernelDelegate(WorkerDimensions workers, nuint[] parameters) => KernelInvoker(kernelSource, parameters, kernel, workers);
 
                 CompiledKernels[method] = kernelDelegate;
                 return kernelDelegate;
@@ -131,6 +131,13 @@ namespace Compute.IL.AST
             // Add type dependencies (e.g., structs)
             foreach (var type in typeDependencies)
             {
+                var attributes = type.GetCustomAttributes(typeof(AliasAttribute), false);
+
+                if (attributes.Length > 0)
+                {
+                    continue; // Skip alias types
+                }
+
                 if (type.IsValueType && !type.IsPrimitive && !type.IsEnum)
                 {
                     RequiredTypes.Add(type);

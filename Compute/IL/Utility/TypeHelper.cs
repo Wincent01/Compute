@@ -64,11 +64,26 @@ namespace Compute.IL.Utility
 
             if (type == null) return null;
 
-            foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static))
+
+            if (!methodDefinition.IsConstructor)
             {
-                if (method.Name == methodDefinition.Name)
+                foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static))
                 {
-                    return method;
+                    if (method.Name == methodDefinition.Name && method.GetParameters().Length == methodDefinition.Parameters.Count)
+                    {
+                        return method;
+                    }
+                }
+            }
+            else
+            {
+                // It's a constructor
+                foreach (var method in type.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static))
+                {
+                    if (method.GetParameters().Length == methodDefinition.Parameters.Count)
+                    {
+                        return method;
+                    }
                 }
             }
 

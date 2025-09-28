@@ -9,8 +9,8 @@ namespace Compute.IL.AST.Instructions
     /// <summary>
     /// AST-based version for loading local variables
     /// </summary>
-    [Instruction(Code.Stfld)]
-    public class AstStfldInstruction : AstInstructionBase
+    [Instruction(Code.Ldflda)]
+    public class AstLdfldaInstruction : AstInstructionBase
     {
         public override IStatement CompileToAst()
         {
@@ -39,13 +39,15 @@ namespace Compute.IL.AST.Instructions
 
             var aliasAttributes = field.GetCustomAttributes(typeof(AliasAttribute), false);
 
-            var value = ExpressionStack.Pop();
-
             var instance = ExpressionStack.Pop();
 
-            var fieldAccess = new FieldAccessExpression(instance, aliasAttributes.Length > 0 ? (aliasAttributes[0] as AliasAttribute)!.Alias : fieldReference.Name, AstType.FromClrType(fieldType));
+            var astType = AstType.FromClrType(fieldType);
 
-            return new AssignmentStatement(fieldAccess, value);
+            var fieldAccess = new FieldAccessExpression(instance, aliasAttributes.Length > 0 ? (aliasAttributes[0] as AliasAttribute)!.Alias : fieldReference.Name, astType);
+
+            ExpressionStack.Push(new AddressOfExpression(fieldAccess, new PointerAstType(astType)));
+
+            return new NopStatement(); // Loading fields doesn't produce a statement
         }
     }
 }

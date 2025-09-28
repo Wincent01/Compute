@@ -40,6 +40,13 @@ namespace Compute.IL.AST.Instructions
 
         private AstType GetArgumentType(int index)
         {
+            var method = TypeHelper.FindMethod(Definition);
+
+            if (method == null)
+                throw new InvalidOperationException($"Unable to resolve method for {Definition.FullName}");
+
+            var parameters = method.GetParameters();
+
             if (index < Definition.Parameters.Count)
             {
                 var param = Definition.Parameters[index];
@@ -51,7 +58,9 @@ namespace Compute.IL.AST.Instructions
 
                 var type = AstType.FromClrType(clrType);
 
-                if (type.IsStruct)
+                var isByValue = parameters[index].GetCustomAttributes(typeof(ByValueAttribute), false).Length > 0;
+
+                if (type.IsStruct && !type.IsPrimitive && !isByValue)
                 {
                     return new PointerAstType(type);
                 }

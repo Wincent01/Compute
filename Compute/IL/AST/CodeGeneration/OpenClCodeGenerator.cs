@@ -31,9 +31,27 @@ namespace Compute.IL.AST.CodeGeneration
                 PrimitiveAstType primitive => GeneratePrimitiveType(primitive),
                 PointerAstType pointer => $"{GenerateType(pointer.ElementType)}*",
                 ArrayAstType array => $"{GenerateType(array.ElementType)}*", // Arrays as pointers in OpenCL
-                StructAstType structType => $"{structType.ClrType!.Name}_{structType.ClrType!.MetadataToken}",
+                StructAstType structType => $"{GenerateStructName(structType.ClrType!)}",
                 _ => throw new NotSupportedException($"Type {type} not supported")
             };
+        }
+
+        private object GenerateStructName(Type type)
+        {
+            var attributes = type.GetCustomAttributes();
+
+            if (attributes != null)
+            {
+                foreach (var attr in attributes)
+                {
+                    if (attr is AliasAttribute aliasAttr)
+                    {
+                        return aliasAttr.Alias;
+                    }
+                }
+            }
+
+            return $"{type.Name}_{type.MetadataToken}";
         }
 
         public string GenerateFunctionName(AstMethodSource methodSource)
@@ -48,19 +66,6 @@ namespace Compute.IL.AST.CodeGeneration
 
             if (methodBase == null)
                 throw new InvalidOperationException($"Unable to find method {methodSource.FullName}");
-
-            var attributes = methodBase.GetCustomAttributes();
-
-            if (attributes != null)
-            {
-                foreach (var attr in attributes)
-                {
-                    if (attr is AliasAttribute aliasAttr)
-                    {
-                        return aliasAttr.Alias;
-                    }
-                }
-            }
 
             // Use the same kernel naming convention as the old system
             return $"{methodSource.Name}_method_{methodBase.MetadataToken}";
@@ -107,6 +112,7 @@ namespace Compute.IL.AST.CodeGeneration
                 ArrayAccessExpression arrayAccess => VisitArrayAccessExpression(arrayAccess),
                 FieldAccessExpression fieldAccess => VisitFieldAccessExpression(fieldAccess),
                 AddressOfExpression addressOf => VisitAddressOfExpression(addressOf),
+                DereferenceExpression dereference => VisitDereferenceExpression(dereference),
 
                 // Statements
                 VariableDeclarationStatement varDecl => VisitVariableDeclarationStatement(varDecl),
@@ -125,13 +131,19 @@ namespace Compute.IL.AST.CodeGeneration
 
         private string VisitLiteralExpression(LiteralExpression literal)
         {
+            if (literal.Value is float f)
+            {
+                var fs = f.ToString();
+                if (!fs.Contains('.') && !fs.Contains('E') && !fs.Contains('e')) fs = $"{fs}.0";
+                return fs + "f";
+            }
+
             return literal.Value switch
             {
                 int i => i.ToString(),
                 uint ui => ui.ToString() + "u",
                 long l => l.ToString() + "l",
                 ulong ul => ul.ToString() + "ul",
-                float f => f.ToString("F") + "f",
                 double d => d.ToString("F"),
                 bool b => b ? "1" : "0", // OpenCL uses int for bool
                 string s => $"\"{s}\"",
@@ -167,20 +179,60 @@ namespace Compute.IL.AST.CodeGeneration
 
             foreach (var attribute in functionCall.Arguments)
             {
-                var paramType = attribute.Type;
+                //var paramType = attribute.Type;
 
                 var arg = attribute.Accept(this);
 
-                if (paramType is StructAstType)
+                /*if (paramType is StructAstType)
                 {
                     arg = $"&{arg}";
-                }
+                }*/
 
                 builder.Append(arg);
                 builder.Append(", ");
             }
+
+            if (builder.Length >= 2) builder.Length -= 2; // Remove last ", "
+
+            var methodBase = TypeHelper.FindMethod(functionCall.Method.Resolve());
+
+            if (methodBase == null)
+                throw new InvalidOperationException($"Unable to find method {functionCall.Method.FullName}");
             
-            var args = builder.Length > 0 ? builder.ToString(0, builder.Length - 2) : "";
+            var attributes = methodBase.GetCustomAttributes(typeof(AliasAttribute), false);
+
+            if (attributes != null)
+            {
+                var aliasAttr = attributes.FirstOrDefault() as AliasAttribute;
+
+                if (aliasAttr != null)
+                {
+                    var aliasName = aliasAttr.Alias;
+                    if (aliasName.StartsWith("operator"))
+                    {
+                        // It's an operator overload
+                        var op = aliasName["operator".Length..];
+                        if (functionCall.Arguments.Count == 1)
+                        {
+                            // Unary operator
+                            return $"({op}{builder})";
+                        }
+                        else if (functionCall.Arguments.Count == 2)
+                        {
+                            // Binary operator
+                            var opArgs = builder.ToString().Split([", "], StringSplitOptions.None);
+                            return $"({opArgs[0]} {op} {opArgs[1]})";
+                        }
+                    }
+                    else
+                    {
+                        // It's a regular function with an alias
+                        return $"{aliasName}({builder})";
+                    }
+                }
+            }
+
+            var args = builder.Length > 0 ? builder.ToString() : "";
 
             return $"{GenerateFunctionName(functionCall.Method)}({args})";
         }
@@ -213,6 +265,13 @@ namespace Compute.IL.AST.CodeGeneration
         {
             var expr = addressOf.Expression.Accept(this);
             return $"(&{expr})";
+        }
+
+        private string VisitDereferenceExpression(DereferenceExpression dereference)
+        {
+            var expr = dereference.Expression.Accept(this);
+
+            return $"*{expr}";
         }
 
         private string VisitVariableDeclarationStatement(VariableDeclarationStatement varDecl)
@@ -333,6 +392,8 @@ namespace Compute.IL.AST.CodeGeneration
 
                 var attributes = parameters[i].GetCustomAttributes();
 
+                var isByValue = false;
+
                 foreach (var attr in attributes)
                 {
                     if (attr is GlobalAttribute)
@@ -355,13 +416,17 @@ namespace Compute.IL.AST.CodeGeneration
                     {
                         builder.Append("const ");
                     }
+                    else if (attr is ByValueAttribute)
+                    {
+                        isByValue = true;
+                    }
                 }
 
                 var astType = AstType.FromClrType(parameters[i].ParameterType);
 
                 var type = GenerateType(astType);
 
-                if (astType.IsStruct && !astType.IsPrimitive)
+                if (astType.IsStruct && !astType.IsPrimitive && !isByValue)
                 {
                     type += "*";
                 }
