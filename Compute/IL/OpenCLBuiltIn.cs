@@ -57,6 +57,45 @@ namespace Compute.IL
         {
             return Marshal.SizeOf(obj);
         }
+
+        [Alias("barrier")]
+        public static void Barrier(int flags = 0)
+        {
+            throw new AliasException();
+        }
+    }
+
+    public static class Atomic
+    {
+        [Alias("atomic_add")]
+        public static int Add(ref int location, int value)
+        {
+            throw new AliasException();
+        }
+
+        [Alias("atomic_sub")]
+        public static int Sub(ref int location, int value)
+        {
+            throw new AliasException();
+        }
+
+        [Alias("atomic_exchange")]
+        public static int Exchange(ref int location, int value)
+        {
+            throw new AliasException();
+        }
+
+        [Alias("atomic_inc")]
+        public static int Inc(ref int location)
+        {
+            throw new AliasException();
+        }
+
+        [Alias("atomic_dec")]
+        public static int Dec(ref int location)
+        {
+            throw new AliasException();
+        }
     }
 
     [Alias("float2")]
@@ -159,6 +198,18 @@ namespace Compute.IL
         [Alias("w")]
         public float W;
 
+        [Alias("r")]
+        public float R { get => X; set => X = value; }
+
+        [Alias("g")]
+        public float G { get => Y; set => Y = value; }
+
+        [Alias("b")]
+        public float B { get => Z; set => Z = value; }
+
+        [Alias("a")]
+        public float A { get => W; set => W = value; }
+
         [Alias("xy")]
         public Float2 XY { get => new Float2 { X = X, Y = Y }; set => (X, Y) = (value.X, value.Y); }
 
@@ -214,5 +265,118 @@ namespace Compute.IL
 
         [Alias("operator*")]
         public static Float4 operator *(float left, [ByValue] Float4 right) => throw new AliasException();
+    }
+
+    public interface IImage { }
+
+    public interface IReadOnlyImage : IImage { }
+
+    public interface IWriteOnlyImage : IImage { }
+
+    [Alias("image1d_t")] [ReadOnly]
+    public readonly struct ReadOnlyImage1D(nuint handle) : IReadOnlyImage
+    {
+        [ValueOnDevice]
+        private readonly nuint Handle = handle;
+    }
+
+    [Alias("image2d_t")] [ReadOnly]
+    public readonly struct ReadOnlyImage2D(nuint handle) : IReadOnlyImage
+    {
+        [ValueOnDevice]
+        private readonly nuint Handle = handle;
+    }
+
+    [Alias("image3d_t")] [ReadOnly]
+    public readonly struct ReadOnlyImage3D(nuint handle) : IReadOnlyImage
+    {
+        [ValueOnDevice]
+        private readonly nuint Handle = handle;
+    }
+
+    [Alias("image1d_t")] [WriteOnly]
+    public readonly struct WriteOnlyImage1D(nuint handle) : IWriteOnlyImage
+    {
+        [ValueOnDevice]
+        private readonly nuint Handle = handle;
+    }
+
+    [Alias("image2d_t")] [WriteOnly]
+    public readonly struct WriteOnlyImage2D(nuint handle) : IWriteOnlyImage
+    {
+        [ValueOnDevice]
+        private readonly nuint Handle = handle;
+    }
+
+    [Alias("image3d_t")] [WriteOnly]
+    public readonly struct WriteOnlyImage3D(nuint handle) : IWriteOnlyImage
+    {
+        [ValueOnDevice]
+        private readonly nuint Handle = handle;
+    }
+
+    public static class Image
+    {
+        [Alias("get_image_width")]
+        public static int GetWidth([ByValue] IImage image) => throw new AliasException();
+
+        [Alias("get_image_height")]
+        public static int GetHeight([ByValue] IImage image) => throw new AliasException();
+
+        [Alias("get_image_depth")]
+        public static int GetDepth([ByValue] IImage image) => throw new AliasException();
+
+        [Alias("read_imagef")]
+        public static Float4 ReadFloat([ByValue] IReadOnlyImage image, [ByValue] Int2 coord) => throw new AliasException();
+
+        [Alias("write_imagef")]
+        public static void WriteFloat([ByValue] IWriteOnlyImage image, [ByValue] Int2 coord, [ByValue] Float4 color) => throw new AliasException();
+
+        [Alias("read_imagei")]
+        public static Int4 ReadInt([ByValue] IReadOnlyImage image, [ByValue] Int2 coord) => throw new AliasException();
+
+        [Alias("write_imagei")]
+        public static void WriteInt([ByValue] IWriteOnlyImage image, [ByValue] Int2 coord, [ByValue] Int4 color) => throw new AliasException();
+
+        [Alias("read_imageui")]
+        public static UInt4 ReadUInt([ByValue] IReadOnlyImage image, [ByValue] Int2 coord) => throw new AliasException();
+
+        [Alias("write_imageui")]
+        public static void WriteUInt([ByValue] IWriteOnlyImage image, [ByValue] Int2 coord, [ByValue] UInt4 color) => throw new AliasException();
+    }
+
+    [Alias("int2")]
+    public struct Int2
+    {
+        [Alias("x")]
+        public int X;
+        [Alias("y")]
+        public int Y;
+    }
+
+    [Alias("int4")]
+    public struct Int4
+    {
+        [Alias("x")]
+        public int X;
+        [Alias("y")]
+        public int Y;
+        [Alias("z")]
+        public int Z;
+        [Alias("w")]
+        public int W;
+    }
+
+    [Alias("uint4")]
+    public struct UInt4
+    {
+        [Alias("x")]
+        public uint X;
+        [Alias("y")]
+        public uint Y;
+        [Alias("z")]
+        public uint Z;
+        [Alias("w")]
+        public uint W;
     }
 }

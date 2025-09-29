@@ -162,6 +162,209 @@ namespace Compute
             OpenBuffers.Remove(buffer);
         }
 
+        /// <summary>
+        /// Creates a 1D OpenCL image
+        /// </summary>
+        public unsafe IntPtr CreateImage1D(uint width, ChannelOrder channelOrder, ChannelType channelType, MemFlags flags, void* hostPtr = null)
+        {
+            var imageFormat = new ImageFormat
+            {
+                ImageChannelOrder = channelOrder,
+                ImageChannelDataType = channelType
+            };
+
+            var imageDesc = new ImageDesc
+            {
+                ImageType = MemObjectType.Image1D,
+                ImageWidth = (UIntPtr)width,
+                ImageHeight = UIntPtr.Zero,
+                ImageDepth = UIntPtr.Zero,
+                ImageArraySize = UIntPtr.Zero,
+                ImageRowPitch = UIntPtr.Zero,
+                ImageSlicePitch = UIntPtr.Zero,
+                NumMipLevels = 0,
+                NumSamples = 0
+            };
+
+            var error = new int[1];
+            var result = Bindings.OpenCl.CreateImage(
+                Handle,
+                flags,
+                &imageFormat,
+                &imageDesc,
+                hostPtr,
+                error
+            );
+
+            if (result == IntPtr.Zero)
+            {
+                throw new Exception($"Failed to create 1D image! Error: {(ErrorCodes)error[0]}");
+            }
+
+            var retainError = (ErrorCodes)Bindings.OpenCl.RetainMemObject(result);
+            if (retainError != ErrorCodes.Success)
+            {
+                throw new Exception("Failed to retain image memory object!");
+            }
+
+            OpenBuffers.Add(result);
+            return result;
+        }
+
+        /// <summary>
+        /// Creates a 2D OpenCL image
+        /// </summary>
+        public unsafe IntPtr CreateImage2D(uint width, uint height, ChannelOrder channelOrder, ChannelType channelType, MemFlags flags, void* hostPtr = null)
+        {
+            var imageFormat = new ImageFormat
+            {
+                ImageChannelOrder = channelOrder,
+                ImageChannelDataType = channelType
+            };
+
+            var imageDesc = new ImageDesc
+            {
+                ImageType = MemObjectType.Image2D,
+                ImageWidth = (UIntPtr)width,
+                ImageHeight = (UIntPtr)height,
+                ImageDepth = UIntPtr.Zero,
+                ImageArraySize = UIntPtr.Zero,
+                ImageRowPitch = UIntPtr.Zero,
+                ImageSlicePitch = UIntPtr.Zero,
+                NumMipLevels = 0,
+                NumSamples = 0
+            };
+
+            var error = new int[1];
+            var result = Bindings.OpenCl.CreateImage(
+                Handle,
+                flags,
+                &imageFormat,
+                &imageDesc,
+                hostPtr,
+                error
+            );
+
+            if (result == IntPtr.Zero)
+            {
+                throw new Exception($"Failed to create 2D image! Error: {(ErrorCodes)error[0]}");
+            }
+
+            var retainError = (ErrorCodes)Bindings.OpenCl.RetainMemObject(result);
+            if (retainError != ErrorCodes.Success)
+            {
+                throw new Exception("Failed to retain image memory object!");
+            }
+
+            OpenBuffers.Add(result);
+            return result;
+        }
+
+        /// <summary>
+        /// Creates a 3D OpenCL image
+        /// </summary>
+        public unsafe IntPtr CreateImage3D(uint width, uint height, uint depth, ChannelOrder channelOrder, ChannelType channelType, MemFlags flags, void* hostPtr = null)
+        {
+            var imageFormat = new ImageFormat
+            {
+                ImageChannelOrder = channelOrder,
+                ImageChannelDataType = channelType
+            };
+
+            var imageDesc = new ImageDesc
+            {
+                ImageType = MemObjectType.Image3D,
+                ImageWidth = (UIntPtr)width,
+                ImageHeight = (UIntPtr)height,
+                ImageDepth = (UIntPtr)depth,
+                ImageArraySize = UIntPtr.Zero,
+                ImageRowPitch = UIntPtr.Zero,
+                ImageSlicePitch = UIntPtr.Zero,
+                NumMipLevels = 0,
+                NumSamples = 0
+            };
+
+            var error = new int[1];
+            var result = Bindings.OpenCl.CreateImage(
+                Handle,
+                flags,
+                &imageFormat,
+                &imageDesc,
+                hostPtr,
+                error
+            );
+
+            if (result == IntPtr.Zero)
+            {
+                throw new Exception($"Failed to create 3D image! Error: {(ErrorCodes)error[0]}");
+            }
+
+            var retainError = (ErrorCodes)Bindings.OpenCl.RetainMemObject(result);
+            if (retainError != ErrorCodes.Success)
+            {
+                throw new Exception("Failed to retain image memory object!");
+            }
+
+            OpenBuffers.Add(result);
+            return result;
+        }
+
+        /// <summary>
+        /// Reads image data from device to host
+        /// </summary>
+        public unsafe void ReadImage<T>(IntPtr image, nuint* origin, nuint* region, Span<T> data) where T : unmanaged
+        {
+            fixed (T* dataPtr = data)
+            {
+                var error = (ErrorCodes)Bindings.OpenCl.EnqueueReadImage(
+                    Queue,
+                    image,
+                    true,
+                    origin,
+                    region,
+                    UIntPtr.Zero,
+                    UIntPtr.Zero,
+                    dataPtr,
+                    0,
+                    null,
+                    null
+                );
+
+                if (error != ErrorCodes.Success)
+                {
+                    throw new Exception($"Failed to read image! Error: {error}");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Writes image data from host to device
+        /// </summary>
+        public unsafe void WriteImage<T>(IntPtr image, nuint* origin, nuint* region, Span<T> data) where T : unmanaged
+        {
+            fixed (T* dataPtr = data)
+            {
+                var error = (ErrorCodes)Bindings.OpenCl.EnqueueWriteImage(
+                    Queue,
+                    image,
+                    true,
+                    origin,
+                    region,
+                    UIntPtr.Zero,
+                    UIntPtr.Zero,
+                    dataPtr,
+                    0,
+                    null,
+                    null
+                );
+
+                if (error != ErrorCodes.Success)
+                {
+                    throw new Exception($"Failed to write image! Error: {error}");
+                }
+            }
+        }
+
         public unsafe void WriteBuffer<T>(IntPtr buffer, Span<T> data, uint offset) where T : unmanaged
         {
             var watch = new Stopwatch();

@@ -12,6 +12,8 @@ public class Parallel : IDisposable
     private List<SharedMemoryStream> _sharedCollections = new();
     private List<(Array originalArray, SharedMemoryStream stream)> _arrayMappings = new();
 
+    private bool _disposed = false;
+
     public Parallel(Context context, uint workers, Action action)
     {
         var target = action.Target;
@@ -149,9 +151,14 @@ public class Parallel : IDisposable
 
     private void Cleanup()
     {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+
         foreach (var stream in _sharedCollections)
         {
-            stream.Dispose();
+            stream.Close();
         }
         _sharedCollections.Clear();
         _arrayMappings.Clear();

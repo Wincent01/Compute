@@ -244,7 +244,7 @@ namespace Compute.IL.AST.CodeGeneration
 
             if (methodBase == null)
                 throw new InvalidOperationException($"Unable to find method {functionCall.Method.FullName}");
-            
+
             var attributes = methodBase.GetCustomAttributes(typeof(AliasAttribute), false);
 
             if (attributes != null)
@@ -387,6 +387,7 @@ namespace Compute.IL.AST.CodeGeneration
 
         private string VisitCommentStatement(CommentStatement comment)
         {
+            return "";
             return $"// {comment.Comment}";
         }
 
@@ -468,6 +469,14 @@ namespace Compute.IL.AST.CodeGeneration
                     {
                         builder.Append("const ");
                     }
+                    else if (attr is ReadOnlyAttribute)
+                    {
+                        builder.Append("read_only ");
+                    }
+                    else if (attr is WriteOnlyAttribute)
+                    {
+                        builder.Append("write_only ");
+                    }
                     else if (attr is ByValueAttribute)
                     {
                         isByValue = true;
@@ -494,14 +503,21 @@ namespace Compute.IL.AST.CodeGeneration
         {
             if (type is StructAstType structType)
             {
+                var fields = structType.ClrType!.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+
+                if (fields.Length == 0)
+                {
+                    return $"typedef struct {structType.ClrType.Name}_{structType.ClrType.MetadataToken} {{ int _dummy; }} {structType.ClrType.Name}_{structType.ClrType.MetadataToken};";
+                }
+
                 var builder = new StringBuilder();
                 builder.AppendLine($"typedef struct {structType.ClrType!.Name}_{structType.ClrType.MetadataToken} {{");
 
-                var fields = structType.ClrType.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
                 foreach (var field in fields)
                 {
-                    var fieldType = GenerateType(AstType.FromClrType(field.FieldType));
-                    builder.AppendLine($"    {fieldType} {field.Name};");
+                    var fieldTypeAst = AstType.FromClrType(field.FieldType);
+                    var fieldType = GenerateType(fieldTypeAst);
+                    builder.AppendLine($"    {GenerateTypeQualifiers(fieldTypeAst)} {fieldType} {field.Name};");
                 }
 
                 builder.AppendLine($"}} {structType.ClrType.Name}_{structType.ClrType.MetadataToken};");
@@ -509,6 +525,51 @@ namespace Compute.IL.AST.CodeGeneration
             }
 
             throw new NotSupportedException($"Type definition for {type} not supported");
+        }
+        
+        public string GenerateTypeQualifiers(AstType type)
+        {
+            var qualifiers = new StringBuilder();
+
+            if (type is PointerAstType pointerType)
+            {
+                var elementType = pointerType.ElementType;
+
+                if (elementType is StructAstType structType)
+                {
+                    var attributes = structType.ClrType!.GetCustomAttributes();
+
+                    foreach (var attr in attributes)
+                    {
+                        if (attr is ReadOnlyAttribute)
+                        {
+                            qualifiers.Append(" read_only");
+                        }
+                        else if (attr is WriteOnlyAttribute)
+                        {
+                            qualifiers.Append(" write_only");
+                        }
+                    }
+                }
+            }
+            else if (type is StructAstType structType)
+            {
+                var attributes = structType.ClrType!.GetCustomAttributes();
+
+                foreach (var attr in attributes)
+                {
+                    if (attr is ReadOnlyAttribute)
+                    {
+                        qualifiers.Append(" read_only");
+                    }
+                    else if (attr is WriteOnlyAttribute)
+                    {
+                        qualifiers.Append(" write_only");
+                    }
+                }
+            }
+
+            return qualifiers.ToString();
         }
     }
 }

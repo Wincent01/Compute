@@ -54,35 +54,69 @@ namespace Compute
             }
         }
 
-        public unsafe void Build()
+        public unsafe void Build(Accelerator accelerator)
         {
-            var error = (ErrorCodes) Bindings.OpenCl.BuildProgram(Handle,
-                0,
-                (IntPtr*)null,
-                (string)null,
-                null,
-                null
-            );
+            Build(accelerator, options: null);
+        }
 
-            if (error == ErrorCodes.Success) return;
-            
-            var buffer = new byte[2048];
+        /// <summary>
+        /// Builds the program with optional build options
+        /// </summary>
+        /// <param name="accelerator">The accelerator (device) to build the program for</param>
+        /// <param name="options">OpenCL build options (e.g., "-cl-std=CL2.0", "-Werror")</param>
+        public unsafe void Build(Accelerator accelerator, string? options)
+        {
+            try
+            {
+                // Check build status before attempting build
+                var initialStatus = GetBuildStatus();
+                if (initialStatus == BuildStatus.Success)
+                    return;
 
-            var length = new UIntPtr[1];
+                var deviceHandle = accelerator.Handle;
+                var error = (ErrorCodes) Bindings.OpenCl.BuildProgram(Handle,
+                    1,
+                    &deviceHandle,
+                    options,
+                    null,
+                    null
+                );
 
-            Bindings.OpenCl.GetProgramBuildInfo(Handle,
-                Context.Accelerator.Handle,
-                ProgramBuildInfo.BuildLog,
-                (UIntPtr) buffer.Length,
-                new Span<byte>(buffer),
-                new Span<UIntPtr>(length)
-            );
+                if (error == ErrorCodes.Success) return;
+                
+                // Get comprehensive build information for better error reporting
+                var buildLog = GetBuildLog();
+                var buildOptions = GetBuildOptions();
+                var finalStatus = GetBuildStatus();
 
-            Array.Resize(ref buffer, (int) length[default]);
+                var errorMessage = $"Failed to build device program!\n" +
+                                 $"Error Code: [{error}]\n" +
+                                 $"Build Status: [{finalStatus}]\n" +
+                                 $"Build Options: [{buildOptions}]\n" +
+                                 $"Device: [{Context.Accelerator.Name}]\n" +
+                                 $"Platform: [{Context.Accelerator.Vendor}]\n" +
+                                 $"Build Log:\n{buildLog}";
 
-            var str = new string(buffer.Select(b => (char) b).ToArray());
-
-            throw new Exception($"Failed to build device program!\nError: [{error}]\nMessage: {str}");
+                throw new Exception(errorMessage);
+            }
+            catch (AccessViolationException ex)
+            {
+                // Handle low-level crashes (like the LLVM assertion failure you encountered)
+                var deviceInfo = $"Device: {Context.Accelerator.Name} ({Context.Accelerator.Vendor})";
+                var suggestion = "This appears to be a driver-level crash. Consider:\n" +
+                               "1. Updating your OpenCL drivers\n" +
+                               "2. Simplifying the kernel code to identify problematic constructs\n" +
+                               "3. Using different build options (e.g., -cl-std=CL1.2)\n" +
+                               "4. Checking for unsupported vector operations or data types";
+                
+                throw new Exception($"OpenCL compiler crashed during build process.\n{deviceInfo}\n{suggestion}\n\nOriginal error: {ex.Message}", ex);
+            }
+            catch (Exception ex) when (!(ex is Exception && ex.Message.StartsWith("Failed to build device program")))
+            {
+                // Handle other unexpected exceptions during build
+                var deviceInfo = $"Device: {Context.Accelerator.Name} ({Context.Accelerator.Vendor})";
+                throw new Exception($"Unexpected error during program build.\n{deviceInfo}\n\nOriginal error: {ex.Message}", ex);
+            }
         }
 
         /// <summary>
@@ -153,6 +187,124 @@ namespace Compute
 
             Array.Resize(ref buffer, (int) length[0]);
             return new string(buffer.Select(b => (char) b).ToArray()).Replace("\0", "");
+        }
+
+        /// <summary>
+        /// Gets the program source code (for debugging purposes)
+        /// </summary>
+        /// <returns>Program source as string</returns>
+        public unsafe string GetSource()
+        {
+            var buffer = new byte[8192]; // Larger buffer for source code
+            var length = new UIntPtr[1];
+
+            var error = (ErrorCodes) Bindings.OpenCl.GetProgramInfo(Handle,
+                ProgramInfo.Source,
+                (UIntPtr) buffer.Length,
+                new Span<byte>(buffer),
+                new Span<UIntPtr>(length)
+            );
+
+            if (error != ErrorCodes.Success)
+                throw new Exception($"Failed to get program source: {error}");
+
+            if (length[0] == UIntPtr.Zero)
+                return "Source not available";
+
+            Array.Resize(ref buffer, (int) length[0]);
+            return new string(buffer.Select(b => (char) b).ToArray()).Replace("\0", "");
+        }
+
+        /// <summary>
+        /// Validates the program source for common issues that might cause compiler crashes
+        /// </summary>
+        /// <returns>List of potential issues found</returns>
+        public List<string> ValidateSource()
+        {
+            var issues = new List<string>();
+            
+            try
+            {
+                var source = GetSource();
+                
+                // Check for common problematic patterns
+                if (source.Contains("image2d_t*"))
+                    issues.Add("Found image2d_t pointer - this might cause issues with some drivers. Consider using image2d_t directly.");
+                
+                if (source.Contains("vector") || source.Contains("Vector"))
+                    issues.Add("Found vector type references - this might be related to the LLVM vector type assertion failure.");
+                
+                // Count vector type usage
+                var vectorTypes = new[] { "float2", "float3", "float4", "int2", "int3", "int4", "uint2", "uint3", "uint4" };
+                foreach (var vectorType in vectorTypes)
+                {
+                    if (source.Contains(vectorType))
+                        issues.Add($"Found {vectorType} usage - ensure proper vector type handling.");
+                }
+                
+                if (source.Contains("__kernel") && source.Split("__kernel").Length > 10)
+                    issues.Add("Large number of kernels detected - consider splitting into multiple programs.");
+                    
+            }
+            catch (Exception ex)
+            {
+                issues.Add($"Could not validate source: {ex.Message}");
+            }
+            
+            return issues;
+        }
+
+        /// <summary>
+        /// Attempts to build with comprehensive error handling and diagnostics
+        /// </summary>
+        /// <param name="accelerator">The accelerator (device) to build the program for</param>
+        /// <param name="options">Build options</param>
+        /// <param name="validate">Whether to validate source before building</param>
+        /// <returns>Build success status and any warnings</returns>
+        public (bool Success, List<string> Warnings) TryBuild(Accelerator accelerator, string? options = null, bool validate = true)
+        {
+            var warnings = new List<string>();
+            
+            try
+            {
+                if (validate)
+                {
+                    var issues = ValidateSource();
+                    if (issues.Count > 0)
+                    {
+                        warnings.Add("Potential issues detected in source:");
+                        warnings.AddRange(issues);
+                    }
+                }
+                
+                // Add defensive build options to prevent some crashes
+                var safeOptions = options ?? "";
+                if (!safeOptions.Contains("-cl-std="))
+                {
+                    safeOptions += " -cl-std=CL1.2"; // Use older standard for better compatibility
+                    warnings.Add("Added -cl-std=CL1.2 for better driver compatibility");
+                }
+                
+                Build(accelerator, safeOptions.Trim());
+                return (true, warnings);
+            }
+            catch (Exception ex)
+            {
+                warnings.Add($"Build failed: {ex.Message}");
+                
+                // Suggest fallback options
+                if (ex.Message.Contains("vector") || ex.Message.Contains("Vector"))
+                {
+                    warnings.Add("SUGGESTION: Try building with -cl-std=CL1.1 to avoid vector type issues");
+                }
+                
+                if (ex.Message.Contains("image"))
+                {
+                    warnings.Add("SUGGESTION: Check image type declarations - avoid pointers to image types");
+                }
+                
+                return (false, warnings);
+            }
         }
 
         public Kernel BuildKernel(MethodInfo method)

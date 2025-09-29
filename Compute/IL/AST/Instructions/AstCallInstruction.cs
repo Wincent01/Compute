@@ -97,15 +97,26 @@ namespace Compute.IL.AST.Instructions
 
             var callExpr = new FunctionCallExpression(methodRef, arguments, returnAstType);
 
-            ExpressionStack.Push(callExpr);
+            if (returnAstType != PrimitiveAstType.Void)
+            {
+                ExpressionStack.Push(callExpr);
+            }
 
-            if (returnType != null) {
+            if (returnType != null)
+            {
                 TypeDependencies.Add(returnType);
             }
 
             MethodDependencies.Add(methodRef.Resolve());
 
-            return new NopStatement();
+            if (returnAstType == PrimitiveAstType.Void)
+            {
+                return new ExpressionStatement(callExpr);
+            }
+            else
+            {
+                return new NopStatement(); // Expression is pushed onto stack, no statement needed
+            }
         }
     }
 }

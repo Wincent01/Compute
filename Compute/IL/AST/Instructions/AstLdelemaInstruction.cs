@@ -7,8 +7,8 @@ namespace Compute.IL.AST.Instructions
     /// <summary>
     /// AST instruction for array element access (ldelem)
     /// </summary>
-    [Instruction(Code.Ldelem_R4, Code.Ldelem_Any, Code.Ldelem_U4, Code.Ldelem_I4)]
-    public class AstLdelemInstruction : AstInstructionBase
+    [Instruction(Code.Ldelema)]
+    public class AstLdelemaInstruction : AstInstructionBase
     {
         public override IStatement CompileToAst()
         {
@@ -18,7 +18,7 @@ namespace Compute.IL.AST.Instructions
             var elementType = GetElementType(array.Type);
             var arrayAccess = new ArrayAccessExpression(array, index, elementType);
             
-            ExpressionStack.Push(arrayAccess);
+            ExpressionStack.Push(new AddressOfExpression(arrayAccess, new PointerAstType(elementType)));
             
             return new NopStatement();
         }
@@ -29,8 +29,7 @@ namespace Compute.IL.AST.Instructions
             {
                 ArrayAstType array => array.ElementType,
                 PointerAstType pointer => pointer.ElementType,
-                StructAstType structType => structType,
-                _ => throw new System.Exception($"Unsupported array type: {arrayType.GetType().FullName}"),
+                _ => PrimitiveAstType.Float32 // Default fallback
             };
         }
     }

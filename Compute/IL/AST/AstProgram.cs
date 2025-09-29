@@ -85,7 +85,7 @@ namespace Compute.IL.AST
             try
             {
                 var program = DeviceProgram.FromSource(Context, code);
-                program.Build();
+                program.Build(Context.Accelerator);
 
                 var kernel = program.BuildKernel(method);
                 void kernelDelegate(WorkerDimensions workers, nuint[] parameters) => KernelInvoker(kernelSource, parameters, kernel, workers);
@@ -130,7 +130,7 @@ namespace Compute.IL.AST
             {
                 var astType = AstType.FromClrType(field.FieldType);
                 var fieldType = CodeGenerator.GenerateType(astType);
-                wrapperBuilder.AppendLine($"    {((astType.IsPointer || astType.IsArray) ? $"__global " : "")} {fieldType} {field.Name};");
+                wrapperBuilder.AppendLine($"    {CodeGenerator.GenerateTypeQualifiers(astType)} {((astType.IsPointer || astType.IsArray) ? $"__global " : "")} {fieldType} {field.Name};");
             }
 
             wrapperBuilder.AppendLine($"}} {CodeGenerator.GenerateStructName(closureType)};");
@@ -148,7 +148,7 @@ namespace Compute.IL.AST
                 var field = fields[i];
                 var astType = AstType.FromClrType(field.FieldType);
                 var fieldType = CodeGenerator.GenerateType(astType);
-                wrapperBuilder.Append($"    {((astType.IsPointer || astType.IsArray) ? $"__global " : "")} {fieldType} {field.Name}");
+                wrapperBuilder.Append($"    {CodeGenerator.GenerateTypeQualifiers(astType)} {((astType.IsPointer || astType.IsArray) ? $"__global " : "")} {fieldType} {field.Name}");
                 if (i < fields.Length - 1)
                     wrapperBuilder.AppendLine(",");
                 else
@@ -168,8 +168,11 @@ namespace Compute.IL.AST
 
             try
             {
+                // Write the code to a file for inspection
+                System.IO.File.WriteAllText($"kernel_error.cl", code);
+
                 var program = DeviceProgram.FromSource(Context, code);
-                program.Build();
+                program.Build(Context.Accelerator, "-cl-std=CL2.0");
 
                 var kernel = program.BuildKernel(kernelName);
                 void kernelDelegate(WorkerDimensions workers, nuint[] parameters) => KernelInvoker(paramterTypes, parameters, kernel, workers);

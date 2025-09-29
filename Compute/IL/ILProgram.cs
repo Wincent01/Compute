@@ -99,7 +99,7 @@ namespace Compute.IL
             {
                 var program = DeviceProgram.FromSource(Context, code);
 
-                program.Build();
+                program.Build(Context.Accelerator);
 
                 var kernel = program.BuildKernel(method);
 

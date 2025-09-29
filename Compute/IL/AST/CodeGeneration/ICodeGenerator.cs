@@ -55,5 +55,12 @@ namespace Compute.IL.AST.CodeGeneration
         /// <param name="type">The AST type to generate definition for</param>
         /// <returns>Type definition string</returns>
         string GenerateTypeDefinition(AstType type);
+
+        /// <summary>
+        /// Generate additional qualifiers for a type (e.g. read_only, write_only)
+        /// </summary>
+        /// <param name="type">The AST type to generate qualifiers for</param>
+        /// <returns>Additional qualifiers string</returns>
+        string GenerateTypeQualifiers(AstType type);
     }
 }

@@ -168,7 +168,7 @@ namespace Compute.Samples
             }
         }
         
-        public static void RunAccelerator(Accelerator accelerator)
+        public static unsafe void RunAccelerator(Accelerator accelerator)
         {
             using var context = accelerator.CreateContext();
 
@@ -177,17 +177,20 @@ namespace Compute.Samples
 
             var astProgram = new AstProgram(context, new OpenClCodeGenerator());
 
-            uint p = 100;
+            uint p = 1024;
+
+            using var sharedImage = SharedImage.Create2DCustom(context, 1024, 1024, ImageChannelOrder.R, ImageChannelType.Float);
+
+            var writeOnlyImage = sharedImage.WriteOnlyView<WriteOnlyImage2D>();
 
             var sharedArray = new Float4[p];
+            var accum = new int[1];
 
             using var parallel = new Parallel(context, p, () =>
             {
                 var i = BuiltIn.GetGlobalId(0);
 
                 if (i >= p) return;
-
-                BuiltIn.Print("Hello from thread %d", i);
 
                 sharedArray[i] = new Float4
                 {
@@ -196,6 +199,17 @@ namespace Compute.Samples
                     Z = i * 3,
                     W = i * 4
                 };
+                
+                var previousValue = Atomic.Add(ref accum[0], 1);
+
+                var c = writeOnlyImage;
+
+                for (int j = 0; j < p; j++)
+                {
+                    //Image.WriteFloat(writeOnlyImage, new Int2 { X = j, Y = i }, new Float4 { R = ((float)previousValue) / p });
+                }
+
+                BuiltIn.Print("Previous value: %d", previousValue);
             });
 
             Console.WriteLine("Shared array contents: ");
