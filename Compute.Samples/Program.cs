@@ -167,6 +167,30 @@ namespace Compute.Samples
                 Console.WriteLine($"Done with: {platform.Name}");
             }
         }
+
+        public static void TestLambda()
+        {
+            int other = 2;
+
+            var lambda = new Action(() =>
+            {
+                other += 1;
+            });
+
+            // Print the field types of this closure
+            var target = lambda.Target;
+            var closureType = target.GetType();
+            var fields = closureType.GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+            Console.WriteLine("Closure fields:");
+            foreach (var field in fields)
+            {
+                Console.WriteLine($" - {field.Name}: {field.FieldType}");
+            }
+
+            lambda();
+
+            Console.WriteLine($"Other value after lambda: {other}");
+        }
         
         public static unsafe void RunAccelerator(Accelerator accelerator)
         {
@@ -185,8 +209,13 @@ namespace Compute.Samples
 
             var sharedArray = new Float4[p];
             var accum = new int[1];
+            int other = 2;
 
-            using var parallel = new Parallel(context, p, () =>
+            TestLambda();
+
+            Console.WriteLine("Starting parallel kernel...");
+
+            Parallel.Run(context, p, () =>
             {
                 var i = BuiltIn.GetGlobalId(0);
 
@@ -199,10 +228,12 @@ namespace Compute.Samples
                     Z = i * 3,
                     W = i * 4
                 };
-                
+
                 var previousValue = Atomic.Add(ref accum[0], 1);
 
-                var c = writeOnlyImage;
+                other += 2;
+
+                //var c = writeOnlyImage;
 
                 for (int j = 0; j < p; j++)
                 {

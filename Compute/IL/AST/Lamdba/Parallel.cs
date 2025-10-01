@@ -4,50 +4,89 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
+using Compute.IL;
 using Compute.IL.AST.CodeGeneration;
 using Compute.Memory;
 
 public class Parallel : IDisposable
 {
-    private List<SharedMemoryStream> _sharedCollections = new();
-    private List<(Array originalArray, SharedMemoryStream stream)> _arrayMappings = new();
+    private readonly List<SharedMemoryStream> _sharedCollections = [];
+    private readonly List<(Array originalArray, SharedMemoryStream stream)> _arrayMappings = [];
 
     private bool _disposed = false;
+    
+    // Fields for compiled kernel state
+    private readonly Context _context;
+    private readonly KernelDelegate _compiledKernel;
+    private readonly string _kernelName;
+    private readonly System.Reflection.FieldInfo[] _closureFields;
+    private readonly Type _closureType;
+    private readonly object _closureInstance;
 
-    public Parallel(Context context, uint workers, Action action)
+    private Parallel(Context context, Action action)
     {
         var target = action.Target;
 
         if (target == null)
             throw new InvalidOperationException("The provided action must be a closure capturing variables.");
 
-        var closureType = target.GetType();
-
-        var fields = closureType.GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+        _context = context;
+        _closureType = target.GetType();
+        _closureInstance = target;
+        _closureFields = _closureType.GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
 
         var program = new AstProgram(context.Accelerator, new OpenClCodeGenerator());
 
-        var del = program.CompileAction(action, out var code, out var kernelName);
+        var compiledKernel = program.CompileAction(action, out var code, out _kernelName);
 
         // Save the code to a file for inspection
         System.IO.File.WriteAllText($"kernel_test.cl", code);
 
-        if (del == null)
+        if (compiledKernel == null)
             throw new InvalidOperationException("Failed to compile the provided action to a kernel.");
 
-        var args = fields.Select(f =>
-        {
-            var value = f.GetValue(target);
-            if (value == null)
-                throw new InvalidOperationException($"Field '{f.Name}' in closure is null and cannot be cast to 'nuint'.");
+        _compiledKernel = compiledKernel;
+    }
 
-            return ConvertToArg(context, value);
+    /// <summary>
+    /// Compiles an action to a reusable kernel without executing it
+    /// </summary>
+    /// <param name="context">The compute context</param>
+    /// <param name="action">The action to compile</param>
+    /// <returns>A Parallel instance with compiled kernel ready for execution</returns>
+    public static Parallel Prepare(Context context, Action action)
+    {
+        return new Parallel(context, action);
+    }
+
+    /// <summary>
+    /// Executes the pre-compiled kernel with the specified number of workers
+    /// </summary>
+    /// <param name="workers">The number of workers to run</param>
+    public void Run(WorkerDimensions workers)
+    {
+        var args = _closureFields.Select(f =>
+        {
+            var value = f.GetValue(_closureInstance) ?? throw new InvalidOperationException($"Field '{f.Name}' in closure is null and cannot be cast to 'nuint'.");
+            return ConvertToArg(_context, value);
         }).ToArray();
 
-        del(workers, args);
+        _compiledKernel(workers, args);
 
         // Write back results from device to host arrays
         WriteBackResults();
+    }
+
+    /// <summary>
+    /// Compiles and executes an action in one call (original behavior)
+    /// </summary>
+    /// <param name="context">The compute context</param>
+    /// <param name="workers">The number of workers to run</param>
+    /// <param name="action">The action to compile and execute</param>
+    public static void Run(Context context, WorkerDimensions workers, Action action)
+    {
+        using var parallel = Prepare(context, action);
+        parallel.Run(workers);
     }
 
     private unsafe nuint ConvertToArg(Context context, object value)
