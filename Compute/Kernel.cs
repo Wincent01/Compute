@@ -239,7 +239,7 @@ namespace Compute
 
         /// <summary>
         /// Invokes the kernel with automatic local work group size determination.
-        /// This is often safer for complex scenarios where manual calculation might fail.
+        /// If workers.LocalSize is set, uses the explicit local work group size instead.
         /// </summary>
         public unsafe void InvokeAuto(WorkerDimensions workers, Span<KernelArgument> parameters)
         {
@@ -267,19 +267,42 @@ namespace Compute
             var dimensions = workers.DimensionCount;
             var globalWork = workers.ToArray();
 
-            fixed (UIntPtr* globalPtr = globalWork)
+            if (workers.LocalSize != null)
             {
-                error = (ErrorCodes) Bindings.OpenCl.EnqueueNdrangeKernel(
-                    Program.Context.Queue,
-                    Handle,
-                    dimensions,
-                    null,
-                    globalPtr,
-                    null, // Let OpenCL determine optimal local work group sizes
-                    0,
-                    null,
-                    null
-                );
+                var localWork = Array.ConvertAll(workers.LocalSize, s => (UIntPtr)s);
+
+                fixed (UIntPtr* globalPtr = globalWork)
+                fixed (UIntPtr* localPtr = localWork)
+                {
+                    error = (ErrorCodes) Bindings.OpenCl.EnqueueNdrangeKernel(
+                        Program.Context.Queue,
+                        Handle,
+                        dimensions,
+                        null,
+                        globalPtr,
+                        localPtr,
+                        0,
+                        null,
+                        null
+                    );
+                }
+            }
+            else
+            {
+                fixed (UIntPtr* globalPtr = globalWork)
+                {
+                    error = (ErrorCodes) Bindings.OpenCl.EnqueueNdrangeKernel(
+                        Program.Context.Queue,
+                        Handle,
+                        dimensions,
+                        null,
+                        globalPtr,
+                        null, // Let OpenCL determine optimal local work group sizes
+                        0,
+                        null,
+                        null
+                    );
+                }
             }
 
             if (error != ErrorCodes.Success)

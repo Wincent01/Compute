@@ -16,6 +16,36 @@ namespace Compute.IL
             return default;
         }
 
+        [Alias("get_local_id")]
+        public static int GetLocalId(int dimension)
+        {
+            return default;
+        }
+
+        [Alias("get_local_size")]
+        public static int GetLocalSize(int dimension)
+        {
+            return default;
+        }
+
+        [Alias("get_group_id")]
+        public static int GetGroupId(int dimension)
+        {
+            return default;
+        }
+
+        [Alias("get_num_groups")]
+        public static int GetNumGroups(int dimension)
+        {
+            return default;
+        }
+
+        [Alias("get_global_size")]
+        public static int GetGlobalSize(int dimension)
+        {
+            return default;
+        }
+
         [Alias("sqrt")]
         public static float Sqrt(float value)
         {

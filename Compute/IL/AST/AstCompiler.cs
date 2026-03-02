@@ -53,7 +53,7 @@ namespace Compute.IL.AST
             for (int i = 0; i < body.Variables.Count; i++)
             {
                 var variable = body.Variables[i];
-                var clrType = TypeHelper.Find(variable.VariableType.FullName) ?? typeof(int);
+                var clrType = ResolveVariableType(variable.VariableType);
                 var astType = AstType.FromClrType(clrType);
                 var name = $"local{i}";
 
@@ -135,6 +135,42 @@ namespace Compute.IL.AST
             methodDependencies = context.MethodDependencies;
 
             return block;
+        }
+
+        /// <summary>
+        /// Resolves a Cecil TypeReference to a CLR Type, handling array types,
+        /// pointer types, and generic parameters that TypeHelper.Find can't resolve directly.
+        /// </summary>
+        private static Type ResolveVariableType(TypeReference typeRef)
+        {
+            // Direct lookup first
+            var direct = TypeHelper.Find(typeRef.FullName);
+            if (direct != null)
+                return direct;
+
+            // Handle array types (e.g. System.Single[])
+            if (typeRef is ArrayType arrayType)
+            {
+                var elementType = ResolveVariableType(arrayType.ElementType);
+                return elementType.MakeArrayType();
+            }
+
+            // Handle pointer types
+            if (typeRef is PointerType pointerType)
+            {
+                var elementType = ResolveVariableType(pointerType.ElementType);
+                return elementType.MakePointerType();
+            }
+
+            // Handle by-reference types
+            if (typeRef is ByReferenceType byRefType)
+            {
+                var elementType = ResolveVariableType(byRefType.ElementType);
+                return elementType.MakeByRefType();
+            }
+
+            // Fallback
+            return typeof(int);
         }
 
         private static Dictionary<Code, Type> LoadAstInstructions()

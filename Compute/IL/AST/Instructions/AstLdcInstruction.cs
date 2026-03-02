@@ -35,7 +35,7 @@ namespace Compute.IL.AST.Instructions
             
             ExpressionStack.Push(literal);
             
-            return new Statements.NopStatement(); // Loading constants doesn't produce a statement
+            return new NopStatement(); // Loading constants doesn't produce a statement
         }
     }
 }

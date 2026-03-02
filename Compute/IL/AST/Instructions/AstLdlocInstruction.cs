@@ -28,7 +28,7 @@ namespace Compute.IL.AST.Instructions
             
             ExpressionStack.Push(variable);
             
-            return new Statements.NopStatement(); // Loading variables doesn't produce a statement
+            return new NopStatement(); // Loading variables doesn't produce a statement
         }
     }
 }

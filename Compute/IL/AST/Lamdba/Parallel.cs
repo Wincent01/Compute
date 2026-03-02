@@ -139,7 +139,50 @@ public class Parallel : IDisposable
             }
         }
 
-        // Handle all value types (primitives and structs)
+        // Handle primitive value types: pass the raw value bits directly in the nuint.
+        // OpenCL's clSetKernelArg expects a pointer to the value in host memory for scalars,
+        // NOT a cl_mem handle. Since KernelInvoker passes &arg (where arg is nuint), we pack
+        // the scalar bits into the low bytes of the nuint on little-endian systems.
+        if (type.IsPrimitive || type.IsEnum)
+        {
+            nuint raw = 0;
+            unsafe
+            {
+                var valueSize = Marshal.SizeOf(type);
+                var gcPin = GCHandle.Alloc(value, GCHandleType.Pinned);
+                try
+                {
+                    Buffer.MemoryCopy(gcPin.AddrOfPinnedObject().ToPointer(), &raw, sizeof(nuint), valueSize);
+                }
+                finally
+                {
+                    gcPin.Free();
+                }
+            }
+
+            // Track for potential writeback (value may be modified by kernel)
+            // For primitives passed by value, we need a buffer to read back from
+            if (field != null)
+            {
+                var primSize = (uint)Marshal.SizeOf(type);
+                var wbStream = GetOrCreateBuffer(context, fieldIndex, primSize);
+                wbStream.Position = 0;
+                var pinHandle = GCHandle.Alloc(value, GCHandleType.Pinned);
+                try
+                {
+                    wbStream.Write(pinHandle.AddrOfPinnedObject().ToPointer(), primSize);
+                }
+                finally
+                {
+                    pinHandle.Free();
+                }
+                _valueTypeWritebacks.Add((field, wbStream, type));
+            }
+
+            return raw;
+        }
+
+        // Handle all other value types (structs) — these still go through device memory
         var valueType = value.GetType();
         var size = (uint)Marshal.SizeOf(valueType);
         

@@ -2,6 +2,7 @@ using System;
 using Compute.IL.AST.Expressions;
 using Compute.IL.AST.Statements;
 using Compute.IL.Utility;
+using Mono.Cecil;
 using Mono.Cecil.Cil;
 
 namespace Compute.IL.AST.Instructions
@@ -14,7 +15,7 @@ namespace Compute.IL.AST.Instructions
     {
         public override IStatement CompileToAst()
         {
-            var methodRef = (Mono.Cecil.MethodReference)Instruction.Operand;
+            var methodRef = (MethodReference)Instruction.Operand;
 
             var declearingType = TypeHelper.Find(methodRef.DeclaringType.FullName);
             if (declearingType == null)
@@ -90,6 +91,12 @@ namespace Compute.IL.AST.Instructions
 
             var returnType = TypeHelper.Find(methodRef.ReturnType.FullName);
 
+            // If TypeHelper.Find failed (e.g. generic parameter T[]), resolve from Cecil type reference
+            if (returnType == null && methodRef.ReturnType.FullName != "System.Void")
+            {
+                returnType = ResolveReturnType(methodRef);
+            }
+
             // Determine return type
             var returnAstType = methodRef.ReturnType.FullName == "System.Void"
                 ? PrimitiveAstType.Void
@@ -117,6 +124,51 @@ namespace Compute.IL.AST.Instructions
             {
                 return new NopStatement(); // Expression is pushed onto stack, no statement needed
             }
+        }
+
+        /// <summary>
+        /// Resolves the CLR return type from a Cecil MethodReference when TypeHelper.Find fails.
+        /// Handles generic method instantiations (e.g. Allocate&lt;float&gt;() returning float[])
+        /// by resolving generic parameters against the generic arguments.
+        /// </summary>
+        private static Type? ResolveReturnType(MethodReference methodRef)
+        {
+            var returnTypeRef = methodRef.ReturnType;
+
+            // Handle array types: T[] where T is a generic parameter
+            if (returnTypeRef is ArrayType arrayTypeRef)
+            {
+                var elementType = ResolveTypeReference(arrayTypeRef.ElementType, methodRef);
+                return elementType?.MakeArrayType();
+            }
+
+            // Handle direct generic parameters
+            if (returnTypeRef is GenericParameter)
+            {
+                var resolved = ResolveTypeReference(returnTypeRef, methodRef);
+                return resolved;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Resolves a Cecil TypeReference, substituting generic parameters from a GenericInstanceMethod.
+        /// </summary>
+        private static Type? ResolveTypeReference(TypeReference typeRef, MethodReference methodRef)
+        {
+            if (typeRef is GenericParameter gp && methodRef is GenericInstanceMethod gim)
+            {
+                // Resolve the generic parameter to the concrete type argument
+                if (gp.Position < gim.GenericArguments.Count)
+                {
+                    var concreteTypeRef = gim.GenericArguments[gp.Position];
+                    return TypeHelper.Find(concreteTypeRef.FullName);
+                }
+            }
+
+            // Try direct lookup
+            return TypeHelper.Find(typeRef.FullName);
         }
     }
 }

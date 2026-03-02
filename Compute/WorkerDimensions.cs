@@ -12,6 +12,13 @@ namespace Compute
         public uint Z { get; }
 
         /// <summary>
+        /// Optional explicit local (work-group) size.
+        /// When set, the runtime passes this to OpenCL instead of letting the driver choose.
+        /// Required for kernels that use __local memory with a tile size that must match the work-group dimensions.
+        /// </summary>
+        public uint[]? LocalSize { get; init; }
+
+        /// <summary>
         /// Gets the number of dimensions (1, 2, or 3) based on which values are non-zero.
         /// </summary>
         public readonly uint DimensionCount

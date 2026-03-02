@@ -25,7 +25,7 @@ namespace Compute.IL.AST.Instructions
             var addressOfExpression = new AddressOfExpression(variable, new PointerAstType(variable.Type));
             ExpressionStack.Push(addressOfExpression);
             
-            return new Statements.NopStatement(); // Loading variable addresses doesn't produce a statement
+            return new NopStatement(); // Loading variable addresses doesn't produce a statement
         }
     }
 }

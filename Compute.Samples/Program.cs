@@ -161,6 +161,9 @@ namespace Compute.Samples
                     // Demonstrate N-body simulation
                     //NBodySimulation.RunNBodyExample(entry);
 
+                    // Demonstrate GEMM with local/shared memory
+                    GemmExample.RunGemmExample(entry);
+
                     // Test value type writeback functionality
                     //ValueTypeWriteBackTest.RunValueTypeWriteBackTest(entry);
 
@@ -227,9 +230,11 @@ namespace Compute.Samples
                     W = i * 4
                 };
 
-                var coord = new Int2();
-                coord.X = i % 1024;
-                coord.Y = i / 1024;
+                var coord = new Int2
+                {
+                    X = i % 1024,
+                    Y = i / 1024
+                };
 
                 Image.WriteFloat(writeOnlyImage, coord, sharedArray[i]);
 
@@ -241,7 +246,7 @@ namespace Compute.Samples
             Console.WriteLine($"Accum[0]: {accum[0]}");
 
             //Console.WriteLine("Shared array contents: ");
-            Console.WriteLine(string.Join(", ", sharedArray));
+            //Console.WriteLine(string.Join(", ", sharedArray));
 
             var astKernel = astProgram.Compile(ExampleKernel, out string source);
 

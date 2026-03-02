@@ -81,6 +81,18 @@ namespace Compute.IL.AST
 
             // Compile the method using AST
             var kernelSource = CompileToAst(method);
+
+            // Apply local memory transform (converts LocalMemory.Allocate to __local declarations)
+            var localMemTransform = new LocalMemoryTransform();
+            var transformContext = new AstTransformContext
+            {
+                Method = method,
+                ClosureFields = null,
+                ClosureType = null,
+                CodeGenerator = CodeGenerator
+            };
+            kernelSource.Body = localMemTransform.Transform(kernelSource.Body, transformContext);
+
             code = GenerateCompleteSource();
 
             try
@@ -256,6 +268,12 @@ namespace Compute.IL.AST
                 if (attributes.Length > 0)
                 {
                     continue; // Skip alias methods
+                }
+
+                // Skip LocalMemory.Allocate — it's a compile-time marker, not a real function
+                if (methodBase.DeclaringType?.Name == "LocalMemory" && methodBase.Name == "Allocate")
+                {
+                    continue;
                 }
 
                 CompileToAst(methodBase);

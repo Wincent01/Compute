@@ -242,7 +242,7 @@ public class SharedImage : IDisposable
             memFlags |= MemFlags.CopyHostPtr;
         }
 
-        var handle = context.CreateImage1D(width, (Silk.NET.OpenCL.ChannelOrder)channelOrder, (Silk.NET.OpenCL.ChannelType)channelType, memFlags, hostData);
+        var handle = context.CreateImage1D(width, (ChannelOrder)channelOrder, (ChannelType)channelType, memFlags, hostData);
         
         return new SharedImage(context, handle, ImageType.Image1D, width, 0, 0, channelOrder, channelType, access);
     }
@@ -265,7 +265,7 @@ public class SharedImage : IDisposable
             memFlags |= MemFlags.CopyHostPtr;
         }
 
-        var handle = context.CreateImage2D(width, height, (Silk.NET.OpenCL.ChannelOrder)channelOrder, (Silk.NET.OpenCL.ChannelType)channelType, memFlags, hostData);
+        var handle = context.CreateImage2D(width, height, (ChannelOrder)channelOrder, (ChannelType)channelType, memFlags, hostData);
         
         return new SharedImage(context, handle, ImageType.Image2D, width, height, 0, channelOrder, channelType, access);
     }
@@ -288,7 +288,7 @@ public class SharedImage : IDisposable
             memFlags |= MemFlags.CopyHostPtr;
         }
 
-        var handle = context.CreateImage3D(width, height, depth, (Silk.NET.OpenCL.ChannelOrder)channelOrder, (Silk.NET.OpenCL.ChannelType)channelType, memFlags, hostData);
+        var handle = context.CreateImage3D(width, height, depth, (ChannelOrder)channelOrder, (ChannelType)channelType, memFlags, hostData);
         
         return new SharedImage(context, handle, ImageType.Image3D, width, height, depth, channelOrder, channelType, access);
     }

@@ -323,8 +323,30 @@ namespace Compute.IL.AST.CodeGeneration
 
         private string VisitVariableDeclarationStatement(VariableDeclarationStatement varDecl)
         {
+            // Address space qualifier (__local, __global, etc.)
+            var qualifier = varDecl.AddressSpace switch
+            {
+                AddressSpace.Local => "__local ",
+                AddressSpace.Global => "__global ",
+                AddressSpace.Constant => "__constant ",
+                AddressSpace.Private => "__private ",
+                _ => ""
+            };
+
+            // Fixed-size array declaration: __local float name[256]
+            if (varDecl.ArraySize.HasValue)
+            {
+                string elementTypeStr = varDecl.Type switch
+                {
+                    ArrayAstType arrayType => GenerateType(arrayType.ElementType),
+                    PointerAstType pointerType => GenerateType(pointerType.ElementType),
+                    _ => GenerateType(varDecl.Type)
+                };
+                return $"{qualifier}{elementTypeStr} {varDecl.Name}[{varDecl.ArraySize.Value}]";
+            }
+
             var type = GenerateType(varDecl.Type);
-            var result = $"{type} {varDecl.Name}";
+            var result = $"{qualifier}{type} {varDecl.Name}";
 
             if (varDecl.InitialValue != null)
             {

@@ -20,7 +20,7 @@ namespace Compute.IL.AST.Instructions
             if (fieldDef == null)
                 throw new System.Exception($"Field {fieldReference.FullName} could not be resolved");
 
-            var fieldType = TypeHelper.Find(fieldDef.FieldType.Resolve());
+            var fieldType = ResolveFieldType(fieldDef.FieldType);
 
             if (fieldType == null)
                 throw new System.Exception($"Field type {fieldDef.FieldType.FullName} could not be resolved");
@@ -51,6 +51,41 @@ namespace Compute.IL.AST.Instructions
             ExpressionStack.Push(fieldAccess);
             
             return new NopStatement(); // Loading fields doesn't produce a statement
+        }
+
+        /// <summary>
+        /// Resolves a Cecil TypeReference to a CLR Type, preserving array/pointer wrappers
+        /// that Resolve() would strip away.
+        /// </summary>
+        private static System.Type? ResolveFieldType(TypeReference typeRef)
+        {
+            switch (typeRef)
+            {
+                case ArrayType arrayType:
+                    {
+                        var elementType = ResolveFieldType(arrayType.ElementType);
+                        return elementType?.MakeArrayType();
+                    }
+
+                case PointerType pointerType:
+                    {
+                        var elementType = ResolveFieldType(pointerType.ElementType);
+                        return elementType?.MakePointerType();
+                    }
+
+                case ByReferenceType byRefType:
+                    {
+                        var elementType = ResolveFieldType(byRefType.ElementType);
+                        return elementType?.MakeByRefType();
+                    }
+            }
+
+            // For regular types, resolve then find
+            var resolved = typeRef.Resolve();
+            if (resolved != null)
+                return TypeHelper.Find(resolved);
+
+            return TypeHelper.Find(typeRef.FullName);
         }
     }
 }
