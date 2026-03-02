@@ -25,7 +25,8 @@ namespace Compute.IL.AST.Instructions
                 _ => throw new System.NotSupportedException($"Stloc opcode {Instruction.OpCode.Code} not supported")
             };
             
-            var variable = GetVariable(index);
+            if (!Variables.TryGetValue(index, out IExpression? variable) || variable == null)
+                throw new System.Exception($"Variable at index {index} not found");
             
             return new AssignmentStatement(variable, value);
         }

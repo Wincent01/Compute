@@ -3,6 +3,7 @@ namespace Compute.IL.AST.Lambda;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using Compute.IL;
 using Compute.IL.AST.CodeGeneration;
@@ -10,8 +11,11 @@ using Compute.Memory;
 
 public class Parallel : IDisposable
 {
-    private readonly List<SharedMemoryStream> _sharedCollections = [];
     private readonly List<(Array originalArray, SharedMemoryStream stream)> _arrayMappings = [];
+    private readonly List<(FieldInfo field, SharedMemoryStream stream, Type originalType)> _valueTypeWritebacks = [];
+    
+    // Buffer reuse indexed by field index to avoid aliasing issues
+    private readonly Dictionary<int, SharedMemoryStream> _bufferCache = [];
 
     private bool _disposed = false;
     
@@ -19,7 +23,7 @@ public class Parallel : IDisposable
     private readonly Context _context;
     private readonly KernelDelegate _compiledKernel;
     private readonly string _kernelName;
-    private readonly System.Reflection.FieldInfo[] _closureFields;
+    private readonly FieldInfo[] _closureFields;
     private readonly Type _closureType;
     private readonly object _closureInstance;
 
@@ -33,7 +37,7 @@ public class Parallel : IDisposable
         _context = context;
         _closureType = target.GetType();
         _closureInstance = target;
-        _closureFields = _closureType.GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+        _closureFields = _closureType.GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
 
         var program = new AstProgram(context.Accelerator, new OpenClCodeGenerator());
 
@@ -65,15 +69,15 @@ public class Parallel : IDisposable
     /// <param name="workers">The number of workers to run</param>
     public void Run(WorkerDimensions workers)
     {
-        var args = _closureFields.Select(f =>
+        var args = _closureFields.Select((f, index) =>
         {
             var value = f.GetValue(_closureInstance) ?? throw new InvalidOperationException($"Field '{f.Name}' in closure is null and cannot be cast to 'nuint'.");
-            return ConvertToArg(_context, value);
+            return ConvertToArg(_context, value, f, index);
         }).ToArray();
 
         _compiledKernel(workers, args);
 
-        // Write back results from device to host arrays
+        // Write back results from device to host arrays and primitives
         WriteBackResults();
     }
 
@@ -89,7 +93,7 @@ public class Parallel : IDisposable
         parallel.Run(workers);
     }
 
-    private unsafe nuint ConvertToArg(Context context, object value)
+    private unsafe nuint ConvertToArg(Context context, object value, FieldInfo field, int fieldIndex)
     {
         var type = value.GetType();
 
@@ -104,37 +108,51 @@ public class Parallel : IDisposable
 
             var array = (Array)value;
 
-            uint size = (uint)(array.Length * Marshal.SizeOf(elementType));
+            uint arraySize = (uint)(array.Length * Marshal.SizeOf(elementType));
 
-            var stream = new SharedMemoryStream(context, size);
+            // Get or create reusable buffer for this field
+            var arrayStream = GetOrCreateBuffer(context, fieldIndex, arraySize);
+
+            // Reset stream position for writing
+            arrayStream.Position = 0;
 
             // Write array data to device memory
-            WriteArrayToDevice(stream, array, elementType);
+            WriteArrayToDevice(arrayStream, array, elementType);
 
-            _sharedCollections.Add(stream);
-            _arrayMappings.Add((array, stream));
+            _arrayMappings.Add((array, arrayStream));
 
-            return stream.UPtr;
+            return arrayStream.UPtr;
         }
 
-        return value switch
+        // Handle all value types (primitives and structs)
+        var valueType = value.GetType();
+        var size = (uint)Marshal.SizeOf(valueType);
+        
+        // Get or create reusable buffer for this field
+        var stream = GetOrCreateBuffer(context, fieldIndex, size);
+        
+        // Reset stream position for writing
+        stream.Position = 0;
+        
+        // Write the value directly to device memory using marshalling
+        var handle = GCHandle.Alloc(value, GCHandleType.Pinned);
+        try
         {
-            bool b => b ? 1u : 0u,
-            byte b => b,
-            sbyte sb => *(byte*)&sb,
-            short s => *(ushort*)&s,
-            ushort us => us,
-            int i => *(uint*)&i,
-            uint ui => ui,
-            long l => sizeof(nuint) == 8 ? (nuint)(*(ulong*)&l) : (nuint)(*(uint*)&l),
-            ulong ul => sizeof(nuint) == 8 ? (nuint)ul : (nuint)ul,
-            float f => *(uint*)&f,
-            double d => sizeof(nuint) == 8 ? (nuint)(*(ulong*)&d) : (nuint)(*(uint*)&d),
-            char c => c,
-            nuint n => n,
-            nint ni => (nuint)ni,
-            _ => throw new ArgumentException($"Unsupported type for bit-preserving conversion: {value.GetType()}")
-        };
+            var ptr = handle.AddrOfPinnedObject();
+            stream.Write(ptr.ToPointer(), size);
+        }
+        finally
+        {
+            handle.Free();
+        }
+
+        // Track value type for potential writeback if we have field info
+        if (field != null)
+        {
+            _valueTypeWritebacks.Add((field, stream, valueType));
+        }
+
+        return stream.UPtr;
     }
 
     private void WriteArrayToDevice(SharedMemoryStream stream, Array array, Type elementType)
@@ -142,13 +160,74 @@ public class Parallel : IDisposable
         stream.WriteArrayGeneric(array, elementType);
     }
 
+    private SharedMemoryStream GetOrCreateBuffer(Context context, int fieldIndex, uint size)
+    {
+        if (_bufferCache.TryGetValue(fieldIndex, out var existingStream))
+        {
+            // Check if the existing buffer is large enough
+            if (existingStream.Length >= size)
+            {
+                return existingStream;
+            }
+            
+            // If buffer is too small, close it and create a new one
+            existingStream.Close();
+            _bufferCache.Remove(fieldIndex);
+        }
+
+        var stream = new SharedMemoryStream(context, size);
+        _bufferCache[fieldIndex] = stream;
+        return stream;
+    }
+
+    private unsafe object ReadValueTypeFromDevice(SharedMemoryStream stream, Type originalType)
+    {
+        // Reset stream position to beginning for reading
+        stream.Position = 0;
+        
+        // Read the value from device memory using marshalling for all value types
+        var size = Marshal.SizeOf(originalType);
+        var buffer = new byte[size];
+        var totalRead = 0;
+        while (totalRead < size)
+        {
+            var bytesRead = stream.Read(buffer, totalRead, size - totalRead);
+            if (bytesRead == 0)
+                throw new InvalidOperationException("Unexpected end of stream while reading value type from device");
+            totalRead += bytesRead;
+        }
+        
+        // Pin the buffer and marshal back to the original type
+        var handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+        try
+        {
+            var ptr = handle.AddrOfPinnedObject();
+            return Marshal.PtrToStructure(ptr, originalType)!;
+        }
+        finally
+        {
+            handle.Free();
+        }
+    }
+
     private void WriteBackResults()
     {
+        // Write back arrays
         foreach (var (originalArray, stream) in _arrayMappings)
         {
             var elementType = originalArray.GetType().GetElementType()!;
             stream.ReadArrayGeneric(originalArray, elementType);
         }
+
+        // Write back value types
+        foreach (var (field, stream, originalType) in _valueTypeWritebacks)
+        {
+            var value = ReadValueTypeFromDevice(stream, originalType);
+            field.SetValue(_closureInstance, value);
+        }
+
+        _arrayMappings.Clear();
+        _valueTypeWritebacks.Clear();
     }
 
     private static bool IsUnmanagedType(Type type)
@@ -166,7 +245,7 @@ public class Parallel : IDisposable
             return false;
 
         // For structs, check all fields recursively
-        var fields = type.GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+        var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 
         foreach (var field in fields)
         {
@@ -195,11 +274,15 @@ public class Parallel : IDisposable
 
         _disposed = true;
 
-        foreach (var stream in _sharedCollections)
+        _arrayMappings.Clear();
+        _valueTypeWritebacks.Clear();
+        
+        // Clear buffer cache
+        foreach (var stream in _bufferCache.Values)
         {
             stream.Close();
         }
-        _sharedCollections.Clear();
-        _arrayMappings.Clear();
+
+        _bufferCache.Clear();
     }
 }

@@ -86,6 +86,15 @@ namespace Compute.Memory
             return result.Length;
         }
 
+        public T Read<T>() where T : unmanaged
+        {
+            var result = Context.ReadBuffer<T>(Handle, 1, (uint) Position)[0];
+
+            Position += Marshal.SizeOf<T>();
+
+            return result;
+        }
+
         public override long Seek(long offset, SeekOrigin origin)
         {
             switch (origin)
@@ -126,6 +135,20 @@ namespace Compute.Memory
 
             Position += count;
         }
+        
+        public unsafe void Write(void* ptr, uint size)
+        {
+            Context.WriteBuffer(Handle, new Span<byte>(ptr, (int) size), (uint) Position);
+
+            Position += size;
+        }
+
+        public void Write<T>(T value) where T : unmanaged
+        {
+            Context.WriteBuffer(Handle, new Span<T>([value]), (uint) Position);
+
+            Position += Marshal.SizeOf<T>();
+        }
 
         /// <summary>
         /// Writes an array of any unmanaged type to the device memory using reflection.
@@ -136,17 +159,17 @@ namespace Compute.Memory
         {
             var originalPosition = Position;
             Position = 0;
-            
+
             // Use reflection to call the generic method for any unmanaged type
-            var writeMethod = typeof(SharedMemoryStream).GetMethod(nameof(WriteArrayGenericTyped), 
+            var writeMethod = typeof(SharedMemoryStream).GetMethod(nameof(WriteArrayGenericTyped),
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            
+
             if (writeMethod == null)
                 throw new InvalidOperationException("WriteArrayGenericTyped method not found.");
-                
+
             var genericMethod = writeMethod.MakeGenericMethod(elementType);
             genericMethod.Invoke(this, new object[] { array });
-            
+
             Position = originalPosition;
         }
         

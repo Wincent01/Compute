@@ -41,6 +41,11 @@ namespace Compute.IL.AST.Instructions
 
             var instance = ExpressionStack.Pop();
 
+            if (instance is AddressOfExpression addressOfExpression && addressOfExpression.Expression is IdentifierExpression idExpr)
+            {
+                instance = idExpr;
+            }
+
             var fieldAccess = new FieldAccessExpression(instance, aliasAttributes.Length > 0 ? (aliasAttributes[0] as AliasAttribute)!.Alias : fieldReference.Name, AstType.FromClrType(fieldType));
 
             ExpressionStack.Push(fieldAccess);

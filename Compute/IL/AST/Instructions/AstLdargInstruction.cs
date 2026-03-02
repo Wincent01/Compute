@@ -15,13 +15,36 @@ namespace Compute.IL.AST.Instructions
         public override IStatement CompileToAst()
         {
             var argIndex = GetArgumentIndex();
-            var argName = GetArgument(argIndex);
-            var argType = GetArgumentType(argIndex);
-            
-            var identifierExpr = new IdentifierExpression(argName, argType);
-            ExpressionStack.Push(identifierExpr);
-            
-            return new NopStatement();
+
+            /*if (argIndex == 0 && Definition.HasThis)
+            {
+                // This is the 'this' argument for instance methods
+                var method = TypeHelper.FindMethod(Definition);
+
+                if (method == null)
+                    throw new InvalidOperationException($"Unable to resolve method for {Definition.FullName}");
+
+                var thisType = method.DeclaringType;
+
+                if (thisType == null)
+                    throw new InvalidOperationException($"Unable to resolve declaring type for method {Definition.FullName}");
+
+                var astType = AstType.FromClrType(thisType);
+
+                var argument = new IdentifierExpression("this", IdentifierType.Parameter, 0, new PointerAstType(astType));
+
+                ExpressionStack.Push(argument);
+
+                return new NopStatement();
+            }
+            else*/
+            {
+                var argument = Context.Arguments[argIndex];
+
+                ExpressionStack.Push(argument);
+
+                return new NopStatement();
+            }
         }
         
         private int GetArgumentIndex()

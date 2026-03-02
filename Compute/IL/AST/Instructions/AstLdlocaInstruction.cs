@@ -18,10 +18,8 @@ namespace Compute.IL.AST.Instructions
                 Code.Ldloca_S => ((VariableDefinition)Instruction.Operand).Index,
                 _ => throw new System.NotSupportedException($"Ldloca opcode {Instruction.OpCode.Code} not supported")
             };
-            
-            var variable = GetVariable(index);
 
-            if (variable == null)
+            if (!Variables.TryGetValue(index, out IExpression? variable) || variable == null)
                 throw new System.Exception($"Variable at index {index} not found");
 
             var addressOfExpression = new AddressOfExpression(variable, new PointerAstType(variable.Type));

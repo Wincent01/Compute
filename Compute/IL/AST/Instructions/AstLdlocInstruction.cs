@@ -23,7 +23,9 @@ namespace Compute.IL.AST.Instructions
                 _ => throw new System.NotSupportedException($"Ldloc opcode {Instruction.OpCode.Code} not supported")
             };
             
-            var variable = GetVariable(index);
+            if (!Variables.TryGetValue(index, out IExpression? variable) || variable == null)
+                throw new System.Exception($"Variable at index {index} not found");
+            
             ExpressionStack.Push(variable);
             
             return new Statements.NopStatement(); // Loading variables doesn't produce a statement

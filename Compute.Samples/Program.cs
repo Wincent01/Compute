@@ -161,6 +161,9 @@ namespace Compute.Samples
                     // Demonstrate N-body simulation
                     //NBodySimulation.RunNBodyExample(entry);
 
+                    // Test value type writeback functionality
+                    //ValueTypeWriteBackTest.RunValueTypeWriteBackTest(entry);
+
                     RunAccelerator(entry);
                 }
 
@@ -203,17 +206,12 @@ namespace Compute.Samples
 
             uint p = 1024;
 
-            using var sharedImage = SharedImage.Create2DCustom(context, 1024, 1024, ImageChannelOrder.R, ImageChannelType.Float);
+            using var sharedImage = SharedImage.Create2DCustom(context, 1024, 1024, ImageChannelOrder.RGBA, ImageChannelType.Float);
 
             var writeOnlyImage = sharedImage.WriteOnlyView<WriteOnlyImage2D>();
 
             var sharedArray = new Float4[p];
             var accum = new int[1];
-            int other = 2;
-
-            TestLambda();
-
-            Console.WriteLine("Starting parallel kernel...");
 
             Parallel.Run(context, p, () =>
             {
@@ -229,21 +227,18 @@ namespace Compute.Samples
                     W = i * 4
                 };
 
+                var coord = new Int2();
+                coord.X = i % 1024;
+                coord.Y = i / 1024;
+
                 var previousValue = Atomic.Add(ref accum[0], 1);
-
-                other += 2;
-
-                //var c = writeOnlyImage;
-
-                for (int j = 0; j < p; j++)
-                {
-                    //Image.WriteFloat(writeOnlyImage, new Int2 { X = j, Y = i }, new Float4 { R = ((float)previousValue) / p });
-                }
 
                 BuiltIn.Print("Previous value: %d", previousValue);
             });
 
-            Console.WriteLine("Shared array contents: ");
+            Console.WriteLine($"Accum[0]: {accum[0]}");
+
+            //Console.WriteLine("Shared array contents: ");
             Console.WriteLine(string.Join(", ", sharedArray));
 
             var astKernel = astProgram.Compile(ExampleKernel, out string source);
@@ -258,7 +253,7 @@ namespace Compute.Samples
 
             Console.WriteLine($"Compile kernel: {watch.ElapsedMilliseconds}ms");
 
-            const int size = 1024 * 1000;
+            const int size = 1024 * 10;
             const int rounds = 25;
 
             var random = new Random();

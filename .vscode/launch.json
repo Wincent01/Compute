@@ -8,7 +8,7 @@
             "name": "C#: Compute.Samples Debug (Dedicated GPU)",
             "type": "coreclr",
             "request": "launch",
-            "program": "${workspaceFolder}/Compute.Samples/bin/Debug/net9.0/Compute.Samples.dll",
+            "program": "${workspaceFolder}/Compute.Samples/bin/Debug/net10.0/Compute.Samples.dll",
             "args": [],
             "cwd": "${workspaceFolder}/Compute.Samples",
             "env": {

@@ -26,5 +26,9 @@ namespace Compute.IL.AST.Instructions
         public required HashSet<Type> TypeDependencies { get; set; }
 
         public required HashSet<MethodDefinition> MethodDependencies { get; set; }
+
+        public required HashSet<int> InlineArgumentStructs { get; set; }
+
+        public required Dictionary<int, IdentifierExpression> Arguments { get; set; }
     }
 }

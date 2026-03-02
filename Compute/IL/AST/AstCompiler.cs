@@ -44,7 +44,9 @@ namespace Compute.IL.AST
                 Variables = variables,
                 Statements = statements,
                 TypeDependencies = [],
-                MethodDependencies = []
+                MethodDependencies = [],
+                InlineArgumentStructs = [],
+                Arguments = []
             };
 
             // Generate variable declarations
@@ -59,15 +61,27 @@ namespace Compute.IL.AST
                 statements.Add(declaration);
 
                 // Also create the identifier for later reference
-                variables[i] = new IdentifierExpression(name, astType);
+                variables[i] = new IdentifierExpression(name, IdentifierType.Variable, i, astType);
 
                 context.TypeDependencies.Add(clrType);
+            }
+
+            if (definition.HasThis)
+            {
+                var thisType = TypeHelper.Find(definition.DeclaringType.FullName) ?? typeof(object);
+                var astType = new PointerAstType(AstType.FromClrType(thisType));
+
+                context.Arguments[0] = new IdentifierExpression("this", IdentifierType.Parameter, 0, astType);
             }
             
             for (int i = 0; i < definition.Parameters.Count; i++)
             {
                 var param = definition.Parameters[i];
                 var clrType = TypeHelper.Find(param.ParameterType.FullName) ?? typeof(int);
+
+                var index = definition.HasThis ? i + 1 : i;
+
+                context.Arguments[index] = new IdentifierExpression(param.Name, IdentifierType.Parameter, index, AstType.FromClrType(clrType));
 
                 context.TypeDependencies.Add(clrType);
             }
@@ -86,7 +100,7 @@ namespace Compute.IL.AST
                 astInstruction.Instruction = instruction;
                 astInstruction.Context = context;
 
-                try
+                //try
                 {
                     statements.Add(new CommentStatement($"{instruction}"));
                     statements.Add(new LabelStatement(instruction.Offset));
@@ -98,10 +112,10 @@ namespace Compute.IL.AST
                         statements.Add(result);
                     }
                 }
-                catch (Exception ex)
+                /*catch (Exception ex)
                 {
                     throw new InvalidOperationException($"Failed to compile instruction {instruction} using AST: {ex.Message}", ex);
-                }
+                }*/
             }
 
             // Remove labels that are not referenced by any jumps

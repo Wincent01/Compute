@@ -19,13 +19,13 @@ namespace Compute.IL.AST.Instructions
 
         public MethodDefinition Definition => Context.Definition;
 
-        public MethodBody Body => Context.Body;
-
         public Stack<IExpression> ExpressionStack => Context.ExpressionStack;
 
         public HashSet<Type> TypeDependencies => Context.TypeDependencies;
 
         public HashSet<MethodDefinition> MethodDependencies => Context.MethodDependencies;
+        
+        public Dictionary<int, IExpression> Variables => Context.Variables;
 
         /// <summary>
         /// Compiles this instruction and returns any resulting statement.
@@ -33,26 +33,5 @@ namespace Compute.IL.AST.Instructions
         /// </summary>
         /// <returns>A statement if this instruction produces one, otherwise null</returns>
         public abstract IStatement CompileToAst();
-
-        protected string GetArgument(int index)
-        {
-            if (Body.Method.HasThis)
-            {
-                index--;
-                if (index < 0) return "this";
-            }
-
-            return Body.Method.Parameters[index].Name;
-        }
-
-        protected IExpression GetVariable(int index)
-        {
-            // Create a new variable reference if not found
-            var varType = TypeHelper.Find(Body.Variables[index].VariableType.FullName);
-            var astType = AstType.FromClrType(varType ?? typeof(int));
-            var identifier = new IdentifierExpression($"local{index}", astType);
-            
-            return identifier;
-        }
     }
 }

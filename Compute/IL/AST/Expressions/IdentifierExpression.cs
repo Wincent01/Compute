@@ -2,6 +2,12 @@ using System.Collections.Generic;
 
 namespace Compute.IL.AST.Expressions
 {
+    public enum IdentifierType
+    {
+        Variable,
+        Parameter
+    }
+    
     /// <summary>
     /// Represents an identifier (variable, parameter, etc.)
     /// </summary>
@@ -9,9 +15,15 @@ namespace Compute.IL.AST.Expressions
     {
         public string Name { get; }
 
-        public IdentifierExpression(string name, AstType type) : base(type)
+        public IdentifierType IdentifierType { get; }
+
+        public int Index { get; }
+
+        public IdentifierExpression(string name, IdentifierType identifierType, int index, AstType type) : base(type)
         {
             Name = name;
+            IdentifierType = identifierType;
+            Index = index;
         }
 
         public override T Accept<T>(IAstVisitor<T> visitor)
