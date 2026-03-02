@@ -124,6 +124,21 @@ public class Parallel : IDisposable
             return arrayStream.UPtr;
         }
 
+        // Handle [ValueOnDevice] structs (e.g. image handles) — pass the raw handle directly
+        // These wrap a nuint handle that is already a cl_mem pointer or similar opaque type.
+        if (type.IsValueType && HasValueOnDeviceField(type))
+        {
+            var handleField = type.GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
+                .FirstOrDefault(f => f.GetCustomAttribute<ValueOnDeviceAttribute>() != null);
+
+            if (handleField != null)
+            {
+                var handleValue = handleField.GetValue(value);
+                if (handleValue is nuint ptr)
+                    return ptr;
+            }
+        }
+
         // Handle all value types (primitives and structs)
         var valueType = value.GetType();
         var size = (uint)Marshal.SizeOf(valueType);
@@ -254,6 +269,16 @@ public class Parallel : IDisposable
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Checks whether a type contains a field marked with [ValueOnDevice],
+    /// indicating it wraps an opaque handle (e.g. cl_mem for image2d_t).
+    /// </summary>
+    private static bool HasValueOnDeviceField(Type type)
+    {
+        return type.GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
+            .Any(f => f.GetCustomAttribute<ValueOnDeviceAttribute>() != null);
     }
 
     ~Parallel()

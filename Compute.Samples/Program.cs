@@ -231,6 +231,8 @@ namespace Compute.Samples
                 coord.X = i % 1024;
                 coord.Y = i / 1024;
 
+                Image.WriteFloat(writeOnlyImage, coord, sharedArray[i]);
+
                 var previousValue = Atomic.Add(ref accum[0], 1);
 
                 BuiltIn.Print("Previous value: %d", previousValue);

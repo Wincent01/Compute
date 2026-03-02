@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -570,6 +571,58 @@ namespace Compute.IL.AST.CodeGeneration
             }
 
             return qualifiers.ToString();
+        }
+
+        public string GenerateClosureKernelSignature(string kernelName, FieldInfo[] closureFields)
+        {
+            var builder = new StringBuilder();
+            builder.Append("__kernel void ");
+            builder.Append(kernelName);
+            builder.Append("(\n");
+
+            for (var i = 0; i < closureFields.Length; i++)
+            {
+                var field = closureFields[i];
+                var astType = AstType.FromClrType(field.FieldType);
+
+                builder.Append("    ");
+
+                // Type qualifiers (read_only, write_only, etc.)
+                var qualifiers = GenerateTypeQualifiers(astType);
+                if (!string.IsNullOrWhiteSpace(qualifiers))
+                    builder.Append($"{qualifiers.Trim()} ");
+
+                // Address space qualifiers for pointers and arrays
+                if (astType.IsPointer || astType.IsArray)
+                    builder.Append("__global ");
+
+                // Also check field-level attributes for address space and access qualifiers
+                var fieldAttributes = field.GetCustomAttributes(false);
+                foreach (var attr in fieldAttributes)
+                {
+                    switch (attr)
+                    {
+                        case GlobalAttribute:   builder.Append("__global "); break;
+                        case LocalAttribute:    builder.Append("__local "); break;
+                        case ConstantAttribute: builder.Append("__constant "); break;
+                        case PrivateAttribute:  builder.Append("__private "); break;
+                        case ConstAttribute:    builder.Append("const "); break;
+                        case ReadOnlyAttribute: builder.Append("read_only "); break;
+                        case WriteOnlyAttribute:builder.Append("write_only "); break;
+                    }
+                }
+
+                var fieldType = GenerateType(astType);
+                builder.Append($"{fieldType} {field.Name}");
+
+                if (i < closureFields.Length - 1)
+                    builder.Append(",\n");
+                else
+                    builder.Append('\n');
+            }
+
+            builder.Append(')');
+            return builder.ToString();
         }
     }
 }

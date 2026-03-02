@@ -6,6 +6,7 @@ using System.Reflection.Metadata;
 using System.Runtime.InteropServices;
 using System.Text;
 using Compute.IL.AST.CodeGeneration;
+using Compute.IL.AST.Transforms;
 using Compute.IL.Utility;
 using Mono.Cecil.Cil;
 
@@ -101,7 +102,10 @@ namespace Compute.IL.AST
         }
 
         /// <summary>
-        /// Compiles an action to a kernel
+        /// Compiles an action (closure/lambda) to a kernel.
+        /// Uses the AST transform pipeline to inline the closure, producing a single
+        /// flat __kernel function where each captured variable is a direct parameter.
+        /// This avoids putting types like image2d_t inside structs (which OpenCL forbids).
         /// </summary>
         public KernelDelegate? CompileAction(Action action, out string code, out string kernelName)
         {
@@ -114,57 +118,64 @@ namespace Compute.IL.AST
 
             var fields = closureType.GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
 
-            // This is not a kernel method, so we need to create a wrapper method that sets up the closure
-            // and then calls the action.
+            var parameterTypes = fields.Select(f => f.FieldType).ToArray();
+
+            // 1. Compile the lambda body to AST (this produces this->field style accesses)
             var kernelSource = CompileToAst(action.Method);
 
-            code = GenerateCompleteSource();
-
-            var wrapperBuilder = new StringBuilder();
-
-            wrapperBuilder.AppendLine($"typedef struct {CodeGenerator.GenerateStructName(closureType)} {{");
-
-            var paramterTypes = fields.Select(f => f.FieldType).ToArray();
-
-            foreach (var field in fields)
+            // 2. Run the transform pipeline to inline the closure
+            var transformContext = new AstTransformContext
             {
-                var astType = AstType.FromClrType(field.FieldType);
-                var fieldType = CodeGenerator.GenerateType(astType);
-                wrapperBuilder.AppendLine($"    {CodeGenerator.GenerateTypeQualifiers(astType)} {((astType.IsPointer || astType.IsArray) ? $"__global " : "")} {fieldType} {field.Name};");
+                Method = action.Method,
+                ClosureFields = fields,
+                ClosureType = closureType,
+                CodeGenerator = CodeGenerator
+            };
+
+            var pipeline = AstTransformPipeline.CreateDefault();
+            kernelSource.Body = pipeline.Run(kernelSource.Body, transformContext);
+
+            // 3. Generate the code — dependency structs and helper functions first
+            var builder = new StringBuilder();
+
+            // Add any required struct definitions (for types used in the kernel, NOT the closure struct)
+            foreach (var structDef in RequiredTypes)
+            {
+                var structAst = new StructAstType(structDef);
+                builder.AppendLine(CodeGenerator.GenerateTypeDefinition(structAst));
             }
 
-            wrapperBuilder.AppendLine($"}} {CodeGenerator.GenerateStructName(closureType)};");
+            // Add helper function declarations and definitions (if the lambda calls other methods)
+            foreach (var source in MethodSources)
+            {
+                if (source == kernelSource) continue; // Skip the kernel itself
 
-            wrapperBuilder.AppendLine();
+                builder.AppendLine();
+                builder.AppendLine($"{CodeGenerator.GenerateFunctionSignature(source)};");
+            }
 
-            wrapperBuilder.AppendLine(code);
+            foreach (var source in MethodSources)
+            {
+                if (source == kernelSource) continue;
 
+                builder.AppendLine();
+                builder.AppendLine(CodeGenerator.GenerateFunctionSignature(source));
+                builder.AppendLine("{");
+                builder.AppendLine(CodeGenerator.GenerateBody(source.Body));
+                builder.AppendLine("}");
+            }
+
+            // 4. Generate the single flat __kernel function
             kernelName = $"{CodeGenerator.GenerateFunctionName(kernelSource)}_kernel";
+            var kernelSignature = CodeGenerator.GenerateClosureKernelSignature(kernelName, fields);
 
-            wrapperBuilder.AppendLine();
-            wrapperBuilder.AppendLine($"__kernel void {kernelName}(");
-            for (var i = 0; i < fields.Length; i++)
-            {
-                var field = fields[i];
-                var astType = AstType.FromClrType(field.FieldType);
-                var fieldType = CodeGenerator.GenerateType(astType);
-                wrapperBuilder.Append($"    {CodeGenerator.GenerateTypeQualifiers(astType)} {((astType.IsPointer || astType.IsArray) ? $"__global " : "")} {fieldType} {field.Name}");
-                if (i < fields.Length - 1)
-                    wrapperBuilder.AppendLine(",");
-                else
-                    wrapperBuilder.AppendLine();
-            }
+            builder.AppendLine();
+            builder.AppendLine(kernelSignature);
+            builder.AppendLine("{");
+            builder.AppendLine(CodeGenerator.GenerateBody(kernelSource.Body));
+            builder.AppendLine("}");
 
-            wrapperBuilder.AppendLine(") {");
-            wrapperBuilder.AppendLine($"    {CodeGenerator.GenerateType(closureType)} closure;");
-            foreach (var field in fields)
-            {
-                wrapperBuilder.AppendLine($"    closure.{field.Name} = {field.Name};");
-            }
-            wrapperBuilder.AppendLine($"    {CodeGenerator.GenerateFunctionName(kernelSource)}(&closure);");
-            wrapperBuilder.AppendLine("}");
-
-            code = wrapperBuilder.ToString();
+            code = builder.ToString();
 
             try
             {
@@ -175,7 +186,7 @@ namespace Compute.IL.AST
                 program.Build(Context.Accelerator, "-cl-std=CL2.0");
 
                 var kernel = program.BuildKernel(kernelName);
-                void kernelDelegate(WorkerDimensions workers, nuint[] parameters) => KernelInvoker(paramterTypes, parameters, kernel, workers);
+                void kernelDelegate(WorkerDimensions workers, nuint[] parameters) => KernelInvoker(parameterTypes, parameters, kernel, workers);
 
                 return kernelDelegate;
             }

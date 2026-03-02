@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 
 namespace Compute.IL.AST.CodeGeneration
 {
@@ -62,5 +63,14 @@ namespace Compute.IL.AST.CodeGeneration
         /// <param name="type">The AST type to generate qualifiers for</param>
         /// <returns>Additional qualifiers string</returns>
         string GenerateTypeQualifiers(AstType type);
+
+        /// <summary>
+        /// Generate a __kernel function signature for a closure whose fields become
+        /// direct kernel parameters, with no closure struct.
+        /// </summary>
+        /// <param name="kernelName">The kernel function name</param>
+        /// <param name="closureFields">The closure fields (become kernel parameters)</param>
+        /// <returns>Complete kernel function signature string</returns>
+        string GenerateClosureKernelSignature(string kernelName, FieldInfo[] closureFields);
     }
 }
