@@ -85,6 +85,45 @@ tile[KernelThread.Local.Y, KernelThread.Local.X] = value;
 Sync.Local();
 ```
 
+### 4) GEMM with tiling
+
+```csharp
+var workers = Grid.Size(N, M).Tile((uint)tile, (uint)tile);
+
+using var parallel = Parallel.Prepare(context, () =>
+{
+    var tileA = LocalMemory.Allocate2D<float>(TILE, TILE);
+    var tileB = LocalMemory.Allocate2D<float>(TILE, TILE);
+
+    int row = KernelThread.Local.Y;
+    int col = KernelThread.Local.X;
+    int globalRow = KernelThread.Group.Y * tile + row;
+    int globalCol = KernelThread.Group.X * tile + col;
+
+    float sum = 0.0f;
+
+    int numTiles = K / tile;
+    for (int t = 0; t < numTiles; t++)
+    {
+        tileA[row, col] = A[globalRow * K + t * tile + col];
+        tileB[row, col] = B[(t * tile + row) * N + globalCol];
+
+        Sync.Local();
+
+        for (int k = 0; k < tile; k++)
+        {
+            sum += tileA[row, k] * tileB[k, col];
+        }
+
+        Sync.Local();
+    }
+
+    C[globalRow * N + globalCol] = sum;
+});
+
+parallel.Run(workers);
+```
+
 ## Notes on Images and Atomics
 
 - Image kernels and atomic operations are supported in the sample suite.
