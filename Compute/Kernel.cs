@@ -260,7 +260,7 @@ namespace Compute
 
                 if (error != ErrorCodes.Success)
                 {
-                    throw new Exception($"Failed to set kernel argument, error: {error}");
+                    throw new Exception($"Failed to set kernel argument {index} (size={parameter.Size}, value=0x{parameter.Value.ToUInt64():X}), error: {error}");
                 }
             }
 

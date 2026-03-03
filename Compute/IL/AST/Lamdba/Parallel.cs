@@ -39,7 +39,7 @@ public class Parallel : IDisposable
         _closureInstance = target;
         _closureFields = _closureType.GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
 
-        var program = new AstProgram(context.Accelerator, new OpenClCodeGenerator());
+        var program = new AstProgram(context, new OpenClCodeGenerator());
 
         var compiledKernel = program.CompileAction(action, out var code, out _kernelName);
 
