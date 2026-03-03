@@ -150,46 +150,53 @@ namespace Compute.Samples
         /// <summary>
         /// Run N-body simulation example with both GPU and CPU implementations
         /// </summary>
-        public static void RunNBodyExample(Accelerator accelerator)
+        public static SampleResult RunNBodyExample(Accelerator accelerator)
         {
             Console.WriteLine($"\n=== N-Body Simulation on {accelerator.Name} ===");
 
             using var context = accelerator.CreateContext();
             var ilProgram = new AstProgram(context, new OpenClCodeGenerator());
 
-            // Compile the kernel
             var watch = Stopwatch.StartNew();
             var kernel = ilProgram.Compile(Simulate, out var source);
-
-            // Write kernel source to file for debugging
             File.WriteAllText("nbody_kernel.cl", source);
-
             watch.Stop();
             Console.WriteLine($"Kernel compilation: {watch.ElapsedMilliseconds}ms");
+
+            if (kernel == null)
+            {
+                return new SampleResult
+                {
+                    Name = "N-Body Simulation",
+                    Passed = false,
+                    Details = "Kernel compilation failed"
+                };
+            }
 
             const int bodyCount = 100;
             const float deltaTime = 1000f;
             const int timeSteps = 1000;
 
-            // Initialize random bodies
-            var random = new Random(11); // Use seed for reproducible results
+            var random = new Random(11);
             var bodies = new Body[bodyCount];
-            
+
             for (var i = 0; i < bodyCount; i++)
             {
-                var position = new Float3 {
-                    X = (random.NextSingle() - 0.5f) * 1e11f, // Random position in range [-5e10, 5e10]
+                var position = new Float3
+                {
+                    X = (random.NextSingle() - 0.5f) * 1e11f,
                     Y = (random.NextSingle() - 0.5f) * 1e11f,
                     Z = (random.NextSingle() - 0.5f) * 1e11f
                 };
 
-                var velocity = new Float3 {
-                    X = (random.NextSingle() - 0.5f) * 1e4f, // Random velocity in range [-5e3, 5e3]
+                var velocity = new Float3
+                {
+                    X = (random.NextSingle() - 0.5f) * 1e4f,
                     Y = (random.NextSingle() - 0.5f) * 1e4f,
                     Z = (random.NextSingle() - 0.5f) * 1e4f
                 };
 
-                bodies[i].Mass = random.NextSingle() * 1e24f + 1e23f; // Random mass between 1e23 and 1.1e24
+                bodies[i].Mass = random.NextSingle() * 1e24f + 1e23f;
                 bodies[i].Position = position;
                 bodies[i].Velocity = velocity;
             }
@@ -198,18 +205,15 @@ namespace Compute.Samples
             var cpuBodies = new Body[bodyCount];
             var tempBodies = new Body[bodyCount];
 
-            // Copy initial state
             Array.Copy(bodies, gpuBodies, bodyCount);
             Array.Copy(bodies, cpuBodies, bodyCount);
 
             Console.WriteLine($"Simulating {bodyCount} bodies for {timeSteps} time steps...");
 
-            // GPU simulation
             using var inputBuffer = new SharedCollection<Body>(context, bodyCount);
             using var outputBuffer = new SharedCollection<Body>(context, bodyCount);
 
             watch.Restart();
-
             for (var step = 0; step < timeSteps; step++)
             {
                 inputBuffer.CopyToDevice(gpuBodies);
@@ -217,24 +221,18 @@ namespace Compute.Samples
                 kernel(bodyCount, inputBuffer, outputBuffer, bodyCount, deltaTimeAsUInt);
                 outputBuffer.CopyToHostNonAlloc(gpuBodies);
             }
-            
             var gpuTime = watch.ElapsedMilliseconds;
-
             Console.WriteLine($"GPU simulation completed in {gpuTime}ms");
 
-            // CPU simulation
             watch.Restart();
-
             for (var step = 0; step < timeSteps; step++)
             {
                 SimulateCPU(cpuBodies, tempBodies, deltaTime);
                 Array.Copy(tempBodies, cpuBodies, bodyCount);
             }
-            
             var cpuTime = watch.ElapsedMilliseconds;
             watch.Stop();
 
-            // Verify results
             var maxError = 0.0f;
             var avgError = 0.0f;
             var validResults = 0;
@@ -243,13 +241,12 @@ namespace Compute.Samples
             {
                 var gpuPos = gpuBodies[i].Position;
                 var cpuPos = cpuBodies[i].Position;
-                
-                // Calculate error manually
+
                 var dX = gpuPos.X - cpuPos.X;
                 var dY = gpuPos.Y - cpuPos.Y;
                 var dZ = gpuPos.Z - cpuPos.Z;
                 var error = (float)Math.Sqrt(dX * dX + dY * dY + dZ * dZ);
-                
+
                 if (!float.IsNaN(error) && !float.IsInfinity(error))
                 {
                     maxError = Math.Max(maxError, error);
@@ -263,7 +260,6 @@ namespace Compute.Samples
                 avgError /= validResults;
             }
 
-            // Display results
             Console.WriteLine($"GPU Time: {gpuTime}ms");
             Console.WriteLine($"CPU Time: {cpuTime}ms");
             Console.WriteLine($"Speedup: {(double)cpuTime / gpuTime:F2}x");
@@ -271,7 +267,6 @@ namespace Compute.Samples
             Console.WriteLine($"Average Position Error: {avgError:E2}");
             Console.WriteLine($"Maximum Position Error: {maxError:E2}");
 
-            // Print some sample results
             Console.WriteLine("\nSample final positions (first 3 bodies):");
             for (var i = 0; i < Math.Min(3, bodyCount); i++)
             {
@@ -282,18 +277,28 @@ namespace Compute.Samples
                 Console.WriteLine($"  CPU: ({cpu.X:E2}, {cpu.Y:E2}, {cpu.Z:E2})");
             }
 
-            // Color-code success/failure
-            if (maxError < 1e6f && validResults == bodyCount) // Allow for some numerical differences
+            var passed = maxError < 1e6f && validResults == bodyCount;
+            if (passed)
             {
                 Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine("✓ N-Body simulation results match between GPU and CPU!");
+                Console.WriteLine("N-Body simulation results match between GPU and CPU!");
             }
             else
             {
                 Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine("⚠ N-Body simulation shows significant differences (expected due to numerical precision)");
+                Console.WriteLine("N-Body simulation shows significant differences (expected due to numerical precision)");
             }
+
             Console.ResetColor();
+
+            return new SampleResult
+            {
+                Name = "N-Body Simulation",
+                Passed = passed,
+                CpuMilliseconds = cpuTime,
+                GpuMilliseconds = gpuTime,
+                Details = $"avgError={avgError:E2}, maxError={maxError:E2}, valid={validResults}/{bodyCount}"
+            };
         }
     }
 }

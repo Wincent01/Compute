@@ -1,390 +1,129 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
-using System.Numerics;
-using Compute.IL;
-using Compute.IL.AST;
-using Compute.IL.AST.CodeGeneration;
-using Compute.IL.AST.Lambda;
-using Compute.IL.AST.Statements;
-using Compute.Memory;
+using Compute;
 
-namespace Compute.Samples
+namespace Compute.Samples;
+
+internal static class Program
 {
-    internal static class Program
+    private delegate SampleResult SampleRunner(Accelerator accelerator);
+
+    private static readonly (string Name, SampleRunner Run)[] SampleSuite =
     {
-        public static Matrix4x4 Multiply([ByValue] Matrix4x4 value1, [ByValue] Matrix4x4 value2)
+        ("GEMM (Local Memory)", GemmExample.RunGemmExample),
+        ("Worker Dimensions", MultiDimensionalExample.RunMultiDimensionalExamples),
+        ("Type-Safe Wrapper", TypeSafeKernelExample.RunTypeSafeExamples),
+        ("N-Body", NBodySimulation.RunNBodyExample),
+        ("Atomics", AtomicExample.RunAtomicExample),
+        ("Images", ImageExample.RunImageExample),
+        ("Reductions", ReductionExample.RunReductionExample)
+    };
+
+    private static int Main()
+    {
+        var overallPassed = true;
+
+        foreach (var platform in Platform.Platforms)
         {
-            Matrix4x4 m;
+            PrintDetails(platform);
+            Console.WriteLine();
 
-            // First row
-            m.M11 = value1.M11 * value2.M11 + value1.M12 * value2.M21 + value1.M13 * value2.M31 +
-                    value1.M14 * value2.M41;
-            m.M12 = value1.M11 * value2.M12 + value1.M12 * value2.M22 + value1.M13 * value2.M32 +
-                    value1.M14 * value2.M42;
-            m.M13 = value1.M11 * value2.M13 + value1.M12 * value2.M23 + value1.M13 * value2.M33 +
-                    value1.M14 * value2.M43;
-            m.M14 = value1.M11 * value2.M14 + value1.M12 * value2.M24 + value1.M13 * value2.M34 +
-                    value1.M14 * value2.M44;
-
-            // Second row
-            m.M21 = value1.M21 * value2.M11 + value1.M22 * value2.M21 + value1.M23 * value2.M31 +
-                    value1.M24 * value2.M41;
-            m.M22 = value1.M21 * value2.M12 + value1.M22 * value2.M22 + value1.M23 * value2.M32 +
-                    value1.M24 * value2.M42;
-            m.M23 = value1.M21 * value2.M13 + value1.M22 * value2.M23 + value1.M23 * value2.M33 +
-                    value1.M24 * value2.M43;
-            m.M24 = value1.M21 * value2.M14 + value1.M22 * value2.M24 + value1.M23 * value2.M34 +
-                    value1.M24 * value2.M44;
-
-            // Third row
-            m.M31 = value1.M31 * value2.M11 + value1.M32 * value2.M21 + value1.M33 * value2.M31 +
-                    value1.M34 * value2.M41;
-            m.M32 = value1.M31 * value2.M12 + value1.M32 * value2.M22 + value1.M33 * value2.M32 +
-                    value1.M34 * value2.M42;
-            m.M33 = value1.M31 * value2.M13 + value1.M32 * value2.M23 + value1.M33 * value2.M33 +
-                    value1.M34 * value2.M43;
-            m.M34 = value1.M31 * value2.M14 + value1.M32 * value2.M24 + value1.M33 * value2.M34 +
-                    value1.M34 * value2.M44;
-
-            // Fourth row
-            m.M41 = value1.M41 * value2.M11 + value1.M42 * value2.M21 + value1.M43 * value2.M31 +
-                    value1.M44 * value2.M41;
-            m.M42 = value1.M41 * value2.M12 + value1.M42 * value2.M22 + value1.M43 * value2.M32 +
-                    value1.M44 * value2.M42;
-            m.M43 = value1.M41 * value2.M13 + value1.M42 * value2.M23 + value1.M43 * value2.M33 +
-                    value1.M44 * value2.M43;
-            m.M44 = value1.M41 * value2.M14 + value1.M42 * value2.M24 + value1.M43 * value2.M34 +
-                    value1.M44 * value2.M44;
-
-            return m;
-        }
-
-        [Kernel]
-        public static void ExampleKernel([Global] Matrix4x4[] input, [Global] Matrix4x4[] output, [Const] uint count)
-        {
-            Float4 value = new Float4();
-            value.X = 1.0f;
-            value.Y = 2.0f;
-            value.Z = 3.0f;
-            value.W = 4.0f;
-
-            value.X += value.Y;
-
-            var val2 = value.WZYX;
-            
-            value *= val2;
-
-            var id = BuiltIn.GetGlobalId(0);
-
-            if (id >= count) return;
-
-            var matrix = input[id];
-
-            for (var i = 0; i < 100; i++)
+            foreach (var accelerator in platform.Accelerators)
             {
-                matrix = Multiply(matrix, matrix);
-            }
-
-            output[id] = matrix;
-        }
-
-        // Simple kernel for AST demonstration
-        [Kernel]
-        public static void SimpleAstKernel([Global] float[] input, [Global] float[] output, [Const] uint count)
-        {
-            var id = BuiltIn.GetGlobalId(0);
-            
-            if (id >= count) return;
-            
-            var value = input[id];
-            output[id] = value * 2.0f + 1.0f;
-        }
-
-        private static void PrintDetails<T>(T instance)
-        {
-            foreach (var property in typeof(T).GetProperties())
-            {
-                object value;
-
-                try
-                {
-                    value = property.GetValue(instance);
-                }
-                catch
-                {
-                    Console.WriteLine($"{property.Name} = Error!");
-                    
-                    continue;
-                }
-                
-                if (value is IEnumerable enumerable && !(value is string))
-                {
-                    var objects = new List<object>();
-                    
-                    foreach (var obj in enumerable)
-                    {
-                        objects.Add(obj);
-                    }
-
-                    value = string.Join(", ", objects);
-                }
-                
-                Console.WriteLine($"{property.Name} = {value}");
-            }
-        }
-
-        private static void Main()
-        {
-            foreach (var platform in Platform.Platforms)
-            {
-                PrintDetails(platform);
-
+                PrintDetails(accelerator);
                 Console.WriteLine();
+                Console.WriteLine($"Running sample suite on {accelerator.Name}...");
 
-                foreach (var entry in platform.Accelerators)
+                var results = new List<SampleResult>(SampleSuite.Length);
+                foreach (var (_, run) in SampleSuite)
                 {
-                    PrintDetails(entry);
-                    
-                    // Demonstrate AST-based compilation alongside traditional approach
-                    //DemonstrateAstVsTraditional(entry);
-
-                    // Demonstrate multi-dimensional worker support
-                    //MultiDimensionalExample.RunMultiDimensionalExamples(entry);
-
-                    // Demonstrate type-safe kernel wrapper
-                    //TypeSafeKernelExample.RunTypeSafeExamples(entry);
-
-                    // Demonstrate N-body simulation
-                    //NBodySimulation.RunNBodyExample(entry);
-
-                    // Demonstrate GEMM with local/shared memory
-                    GemmExample.RunGemmExample(entry);
-
-                    // Test value type writeback functionality
-                    //ValueTypeWriteBackTest.RunValueTypeWriteBackTest(entry);
-
-                    RunAccelerator(entry);
+                    var result = run(accelerator);
+                    results.Add(result);
                 }
 
-                Console.WriteLine($"Done with: {platform.Name}");
+                var suitePass = PrintSummary(results);
+                overallPassed = overallPassed && suitePass;
+
+                Console.WriteLine(new string('═', 72));
+            }
+
+            Console.WriteLine($"Done with: {platform.Name}");
+            Console.WriteLine();
+        }
+
+        return overallPassed ? 0 : 1;
+    }
+
+    private static bool PrintSummary(IReadOnlyList<SampleResult> results)
+    {
+        Console.WriteLine("\nSample Summary");
+        Console.WriteLine(new string('-', 72));
+
+        var passedCount = 0;
+
+        foreach (var result in results)
+        {
+            if (result.Passed)
+            {
+                Console.ForegroundColor = ConsoleColor.Green;
+                passedCount++;
+            }
+            else
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+            }
+
+            var correctness = result.Passed ? "PASS" : "FAIL";
+            Console.Write($"[{correctness}] ");
+            Console.ResetColor();
+
+            var cpu = result.CpuMilliseconds.HasValue ? $"CPU={result.CpuMilliseconds}ms" : "CPU=n/a";
+            var gpu = result.GpuMilliseconds.HasValue ? $"GPU={result.GpuMilliseconds}ms" : "GPU=n/a";
+            var speedup = result.Speedup.HasValue ? $"Speedup={result.Speedup.Value:F2}x" : "Speedup=n/a";
+
+            Console.WriteLine($"{result.Name}: {cpu}, {gpu}, {speedup}");
+
+            if (!string.IsNullOrWhiteSpace(result.Details))
+            {
+                Console.WriteLine($"         {result.Details}");
             }
         }
 
-        public static void TestLambda()
+        Console.WriteLine(new string('-', 72));
+        Console.WriteLine($"Suite result: {passedCount}/{results.Count} examples passed");
+
+        return passedCount == results.Count;
+    }
+
+    private static void PrintDetails<T>(T instance)
+    {
+        foreach (var property in typeof(T).GetProperties())
         {
-            int other = 2;
+            object value;
 
-            var lambda = new Action(() =>
+            try
             {
-                other += 1;
-            });
-
-            // Print the field types of this closure
-            var target = lambda.Target;
-            var closureType = target.GetType();
-            var fields = closureType.GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
-            Console.WriteLine("Closure fields:");
-            foreach (var field in fields)
+                value = property.GetValue(instance);
+            }
+            catch
             {
-                Console.WriteLine($" - {field.Name}: {field.FieldType}");
+                Console.WriteLine($"{property.Name} = Error!");
+                continue;
             }
 
-            lambda();
-
-            Console.WriteLine($"Other value after lambda: {other}");
-        }
-        
-        public static unsafe void RunAccelerator(Accelerator accelerator)
-        {
-            using var context = accelerator.CreateContext();
-
-            var watch = new Stopwatch();
-            watch.Start();
-
-            var astProgram = new AstProgram(context, new OpenClCodeGenerator());
-
-            uint p = 1024;
-
-            using var sharedImage = SharedImage.Create2DCustom(context, 1024, 1024, ImageChannelOrder.RGBA, ImageChannelType.Float);
-
-            var writeOnlyImage = sharedImage.WriteOnlyView<WriteOnlyImage2D>();
-
-            var sharedArray = new Float4[p];
-            var accum = new int[1];
-
-            Parallel.Run(context, p, () =>
+            if (value is IEnumerable enumerable && value is not string)
             {
-                var i = BuiltIn.GetGlobalId(0);
-
-                if (i >= p) return;
-
-                sharedArray[i] = new Float4
+                var objects = new List<object>();
+                foreach (var obj in enumerable)
                 {
-                    X = i,
-                    Y = i * 2,
-                    Z = i * 3,
-                    W = i * 4
-                };
+                    objects.Add(obj);
+                }
 
-                var coord = new Int2
-                {
-                    X = i % 1024,
-                    Y = i / 1024
-                };
-
-                Image.WriteFloat(writeOnlyImage, coord, sharedArray[i]);
-
-                var previousValue = Atomic.Add(ref accum[0], 1);
-
-                BuiltIn.Print("Previous value: %d", previousValue);
-            });
-
-            Console.WriteLine($"Accum[0]: {accum[0]}");
-
-            //Console.WriteLine("Shared array contents: ");
-            //Console.WriteLine(string.Join(", ", sharedArray));
-
-            var astKernel = astProgram.Compile(ExampleKernel, out string source);
-
-            File.WriteAllText("kernel.cl", source); // Save source for debugging
-
-            if (astKernel == null)
-            {
-                Console.WriteLine("AST compilation failed - aborting test");
-                return;
+                value = string.Join(", ", objects);
             }
 
-            Console.WriteLine($"Compile kernel: {watch.ElapsedMilliseconds}ms");
-
-            const int size = 1024 * 10;
-            const int rounds = 25;
-
-            var random = new Random();
-
-            var totalFail = 0L;
-            var totalGpu = 0L;
-            var totalCpu = 0L;
-
-            var data = new Matrix4x4[size];
-
-            var results = new Matrix4x4[size];
-
-            using var input = new SharedCollection<Matrix4x4>(context, size);
-
-            using var output = new SharedCollection<Matrix4x4>(context, size);
-
-            for (var j = 0; j < rounds; j++)
-            {
-                for (var i = 0; i < size; i++)
-                {
-                    data[i].M11 = random.Next(1, 1000);
-                    data[i].M12 = random.Next(1, 1000);
-                    data[i].M13 = random.Next(1, 1000);
-                    data[i].M14 = random.Next(1, 1000);
-                    data[i].M21 = random.Next(1, 1000);
-                    data[i].M22 = random.Next(1, 1000);
-                    data[i].M23 = random.Next(1, 1000);
-                    data[i].M24 = random.Next(1, 1000);
-                    data[i].M31 = random.Next(1, 1000);
-                    data[i].M32 = random.Next(1, 1000);
-                    data[i].M33 = random.Next(1, 1000);
-                    data[i].M34 = random.Next(1, 1000);
-                    data[i].M41 = random.Next(1, 1000);
-                    data[i].M42 = random.Next(1, 1000);
-                    data[i].M43 = random.Next(1, 1000);
-                    data[i].M44 = random.Next(1, 1000);
-                }
-
-                watch.Restart();
-
-                input.CopyToDevice(data);
-
-                astKernel(size, input, output, size);
-
-                output.CopyToHostNonAlloc(results);
-
-                var gpu = watch.ElapsedMilliseconds;
-
-                watch.Restart();
-
-                for (var i = 0; i < size; i++)
-                {
-                    var value = data[i];
-
-                    for (var k = 0; k < 100; k++)
-                    {
-                        value = Multiply(value, value);
-                    }
-
-                    data[i] = value;
-                }
-
-                var cpu = watch.ElapsedMilliseconds;
-
-                watch.Stop();
-
-                var failed = 0;
-
-                for (var i = 0; i < size; i++)
-                {
-                    if (!results[i].Equals(data[i]))
-                    {
-                        failed++;
-                    }
-                }
-
-                if (failed == 0)
-                {
-                    Console.ForegroundColor = ConsoleColor.Green;
-                }
-                else
-                {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                }
-
-                Console.WriteLine(
-                    $"[{j + 1:0000}/{rounds:0000}] Kernel succeeded with {Percent(size, failed)} operations at {Percent(cpu, gpu, true)} IL speed!"
-                );
-
-                totalFail += failed;
-                totalCpu += cpu;
-                totalGpu += gpu;
-
-                Console.ResetColor();
-            }
-
-            Console.WriteLine(
-                $"Ran {rounds} rounds in sets of {size}, total operations: {rounds * size}\n" +
-                $"Total success: {Percent(size * rounds, totalFail)} with {totalFail} errors\n" +
-                $"Total speed: {Percent(totalCpu, totalGpu, true)} IL speed with {totalCpu}ms CPU-time and {totalGpu}ms GPU-time"
-            );
-
-            accelerator.Dispose();
-        }
-
-        public static string Percent(double a, double b, bool overflow = false)
-        {
-            if (b.Equals(0))
-            {
-                if (overflow)
-                {
-                    b = 1;
-                }
-                else
-                {
-                    return "100%";
-                }
-            }
-
-            var percent = a / b * 100;
-
-            percent = Math.Round(percent, 2);
-
-            return $"{percent}%";
+            Console.WriteLine($"{property.Name} = {value}");
         }
     }
 }

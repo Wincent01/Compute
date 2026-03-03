@@ -66,7 +66,7 @@ public static class GemmExample
     // ─────────────────────────────────────────────
     //  Runner
     // ─────────────────────────────────────────────
-    public static void RunGemmExample(Accelerator accelerator)
+    public static SampleResult RunGemmExample(Accelerator accelerator)
     {
         Console.WriteLine("═══════════════════════════════════════════");
         Console.WriteLine("  GEMM with Local Memory (Tiled)");
@@ -90,25 +90,38 @@ public static class GemmExample
         var sw = Stopwatch.StartNew();
         CpuGemm(A, B, C_cpu, M, N, K);
         sw.Stop();
+        var cpuMs = sw.ElapsedMilliseconds;
         Console.WriteLine($"CPU reference: {sw.ElapsedMilliseconds} ms");
 
         // ── Lambda GEMM ──
         using var context = accelerator.CreateContext();
-        RunLambdaGemm(context, A, B, C_gpu, M, N, K);
-        VerifyResults("Lambda GEMM", C_cpu, C_gpu, M, N);
+        var lambdaMs = RunLambdaGemm(context, A, B, C_gpu, M, N, K);
+        var lambdaPass = VerifyResults("Lambda GEMM", C_cpu, C_gpu, M, N);
 
         // ── Standalone [Kernel] GEMM ──
         Array.Clear(C_gpu);
-        RunStandaloneGemm(context, A, B, C_gpu, M, N, K);
-        VerifyResults("Standalone GEMM", C_cpu, C_gpu, M, N);
+        var standaloneMs = RunStandaloneGemm(context, A, B, C_gpu, M, N, K);
+        var standalonePass = VerifyResults("Standalone GEMM", C_cpu, C_gpu, M, N);
 
         Console.WriteLine("═══════════════════════════════════════════\n");
+
+        var bestGpu = Math.Min(lambdaMs, standaloneMs);
+        var details = $"lambda={lambdaMs}ms, standalone={standaloneMs}ms, best={bestGpu}ms";
+
+        return new SampleResult
+        {
+            Name = "GEMM (Local Memory)",
+            Passed = lambdaPass && standalonePass,
+            CpuMilliseconds = cpuMs,
+            GpuMilliseconds = bestGpu,
+            Details = details
+        };
     }
 
     // ─────────────────────────────────────────────
     //  Lambda GEMM  (Parallel.Run)
     // ─────────────────────────────────────────────
-    private static void RunLambdaGemm(Context context, float[] A, float[] B, float[] C, int M, int N, int K)
+    private static long RunLambdaGemm(Context context, float[] A, float[] B, float[] C, int M, int N, int K)
     {
         var sw = Stopwatch.StartNew();
         int tile = TILE;
@@ -149,12 +162,13 @@ public static class GemmExample
         parallel.Run(workers);
         sw.Stop();
         Console.WriteLine($"Lambda GEMM:     {sw.ElapsedMilliseconds} ms");
+        return sw.ElapsedMilliseconds;
     }
 
     // ─────────────────────────────────────────────
     //  Standalone [Kernel] GEMM  (AstProgram.CompileDelegate)
     // ─────────────────────────────────────────────
-    private static void RunStandaloneGemm(Context context, float[] A, float[] B, float[] C, int M, int N, int K)
+    private static long RunStandaloneGemm(Context context, float[] A, float[] B, float[] C, int M, int N, int K)
     {
         var sw = Stopwatch.StartNew();
 
@@ -169,7 +183,7 @@ public static class GemmExample
         if (kernel == null)
         {
             Console.WriteLine("ERROR: Standalone GEMM compilation failed");
-            return;
+            return long.MaxValue;
         }
 
         // Set up shared collections
@@ -188,6 +202,7 @@ public static class GemmExample
 
         sw.Stop();
         Console.WriteLine($"Standalone GEMM: {sw.ElapsedMilliseconds} ms");
+        return sw.ElapsedMilliseconds;
     }
 
     // ─────────────────────────────────────────────
@@ -208,7 +223,7 @@ public static class GemmExample
     // ─────────────────────────────────────────────
     //  Verification
     // ─────────────────────────────────────────────
-    private static void VerifyResults(string label, float[] expected, float[] actual, int M, int N)
+    private static bool VerifyResults(string label, float[] expected, float[] actual, int M, int N)
     {
         int errors = 0;
         float maxDiff = 0;
@@ -223,12 +238,13 @@ public static class GemmExample
         {
             Console.ForegroundColor = ConsoleColor.Green;
             Console.WriteLine($"  {label}: PASS  (max diff: {maxDiff:E2})");
+            Console.ResetColor();
+            return true;
         }
-        else
-        {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"  {label}: FAIL  ({errors}/{expected.Length} elements differ, max diff: {maxDiff:E2})");
-        }
+
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine($"  {label}: FAIL  ({errors}/{expected.Length} elements differ, max diff: {maxDiff:E2})");
         Console.ResetColor();
+        return false;
     }
 }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using Compute.IL;
 using Compute.IL.AST.Expressions;
 using Compute.IL.AST.Statements;
 using Compute.IL.Utility;
@@ -470,6 +471,15 @@ namespace Compute.IL.AST.CodeGeneration
 
                 var isByValue = false;
 
+                var astType = AstType.FromClrType(parameters[i].ParameterType);
+
+                var typeQualifiers = GenerateTypeQualifiers(astType);
+                if (!string.IsNullOrWhiteSpace(typeQualifiers))
+                {
+                    builder.Append(typeQualifiers.Trim());
+                    builder.Append(' ');
+                }
+
                 foreach (var attr in attributes)
                 {
                     if (attr is GlobalAttribute)
@@ -506,11 +516,9 @@ namespace Compute.IL.AST.CodeGeneration
                     }
                 }
 
-                var astType = AstType.FromClrType(parameters[i].ParameterType);
-
                 var type = GenerateType(astType);
 
-                if (astType.IsStruct && !astType.IsPrimitive && !isByValue)
+                if (astType.IsStruct && !astType.IsPrimitive && !isByValue && !IsOpaqueOpenClHandleType(astType))
                 {
                     type += "*";
                 }
@@ -520,6 +528,16 @@ namespace Compute.IL.AST.CodeGeneration
             builder.Append(')');
 
             return builder.ToString();
+        }
+
+        private static bool IsOpaqueOpenClHandleType(AstType astType)
+        {
+            if (astType is not StructAstType structType || structType.ClrType == null)
+            {
+                return false;
+            }
+
+            return typeof(IImage).IsAssignableFrom(structType.ClrType);
         }
 
         public string GenerateTypeDefinition(AstType type)

@@ -242,10 +242,13 @@ namespace Compute.IL.AST.Transforms
                 if (node.Expression is FunctionCallExpression call &&
                     IsIndexerSetter(call, out var info, out var target, out var indices, out var value))
                 {
+                    var nonNullInfo = info!;
+                    var nonNullTarget = target!;
+                    var nonNullValue = value!;
                     var rewrittenIndices = indices.Select(Rewrite).ToArray();
-                    var linearIndex = BuildLinearIndex(rewrittenIndices, info.DimensionLiterals);
-                    var targetAccess = new ArrayAccessExpression(target, linearIndex, info.ElementType);
-                    return new AssignmentStatement(targetAccess, Rewrite(value));
+                    var linearIndex = BuildLinearIndex(rewrittenIndices, nonNullInfo.DimensionLiterals);
+                    var targetAccess = new ArrayAccessExpression(nonNullTarget, linearIndex, nonNullInfo.ElementType);
+                    return new AssignmentStatement(targetAccess, Rewrite(nonNullValue));
                 }
 
                 return base.RewriteExpressionStatement(node);
@@ -255,15 +258,17 @@ namespace Compute.IL.AST.Transforms
             {
                 if (IsIndexerGetter(node, out var info, out var target, out var indices))
                 {
+                    var nonNullInfo = info!;
+                    var nonNullTarget = target!;
                     var rewrittenIndices = indices.Select(Rewrite).ToArray();
-                    var linearIndex = BuildLinearIndex(rewrittenIndices, info.DimensionLiterals);
-                    return new ArrayAccessExpression(target, linearIndex, info.ElementType);
+                    var linearIndex = BuildLinearIndex(rewrittenIndices, nonNullInfo.DimensionLiterals);
+                    return new ArrayAccessExpression(nonNullTarget, linearIndex, nonNullInfo.ElementType);
                 }
 
                 return base.RewriteFunctionCall(node);
             }
 
-            private bool IsIndexerGetter(FunctionCallExpression call, out LocalAllocationInfo info, out IdentifierExpression target, out IReadOnlyList<IExpression> indices)
+            private bool IsIndexerGetter(FunctionCallExpression call, out LocalAllocationInfo? info, out IdentifierExpression? target, out IReadOnlyList<IExpression> indices)
             {
                 info = null!;
                 target = null!;
@@ -275,8 +280,10 @@ namespace Compute.IL.AST.Transforms
                 if (!TryGetTargetIdentifier(call.Arguments[0], out target))
                     return false;
 
-                if (!_localAllocations.TryGetValue(target.Name, out info))
+                if (!_localAllocations.TryGetValue(target.Name, out var resolvedInfo))
                     return false;
+
+                info = resolvedInfo;
 
                 if (call.Arguments.Count != info.DimensionLiterals.Count + 1)
                     return false;
@@ -285,7 +292,7 @@ namespace Compute.IL.AST.Transforms
                 return true;
             }
 
-            private bool IsIndexerSetter(FunctionCallExpression call, out LocalAllocationInfo info, out IdentifierExpression target, out IReadOnlyList<IExpression> indices, out IExpression value)
+            private bool IsIndexerSetter(FunctionCallExpression call, out LocalAllocationInfo? info, out IdentifierExpression? target, out IReadOnlyList<IExpression> indices, out IExpression? value)
             {
                 info = null!;
                 target = null!;
@@ -298,8 +305,10 @@ namespace Compute.IL.AST.Transforms
                 if (!TryGetTargetIdentifier(call.Arguments[0], out target))
                     return false;
 
-                if (!_localAllocations.TryGetValue(target.Name, out info))
+                if (!_localAllocations.TryGetValue(target.Name, out var resolvedInfo))
                     return false;
+
+                info = resolvedInfo;
 
                 if (call.Arguments.Count != info.DimensionLiterals.Count + 2)
                     return false;

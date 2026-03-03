@@ -110,7 +110,9 @@ namespace Compute.IL
 
         private SharedCollection<T> CreateSharedCollectionGeneric<T>(T[] array) where T : unmanaged
         {
-            return new SharedCollection<T>(_program.Context, new Span<T>(array), true);
+            var shared = new SharedCollection<T>(_program.Context, array.Length);
+            shared.CopyToDevice(array);
+            return shared;
         }
 
         private void CopyResultsBack(Array originalArray, IDisposable sharedCollection)
