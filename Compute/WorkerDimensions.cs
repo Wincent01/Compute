@@ -7,16 +7,13 @@ namespace Compute
     /// </summary>
     public readonly struct WorkerDimensions
     {
-        public uint X { get; }
-        public uint Y { get; }
-        public uint Z { get; }
+        public uint X { get; init; }
+        public uint Y { get; init; }
+        public uint Z { get; init; }
 
-        /// <summary>
-        /// Optional explicit local (work-group) size.
-        /// When set, the runtime passes this to OpenCL instead of letting the driver choose.
-        /// Required for kernels that use __local memory with a tile size that must match the work-group dimensions.
-        /// </summary>
-        public uint[]? LocalSize { get; init; }
+        public uint LocalX { get; init; }
+        public uint LocalY { get; init; }
+        public uint LocalZ { get; init; }
 
         /// <summary>
         /// Gets the number of dimensions (1, 2, or 3) based on which values are non-zero.
@@ -30,6 +27,18 @@ namespace Compute
                 return 1;
             }
         }
+
+        public readonly uint LocalDimensionCount
+        {
+            get
+            {
+                if (LocalZ > 0) return 3;
+                if (LocalY > 0) return 2;
+                return 1;
+            }
+        }
+
+        public readonly bool HasLocalSize => LocalX > 0 || LocalY > 0 || LocalZ > 0;
 
         /// <summary>
         /// Creates a 1D worker dimension.
@@ -79,6 +88,20 @@ namespace Compute
                 2 => [X, Y],
                 3 => [X, Y, Z],
                 _ => throw new InvalidOperationException("At least X dimension must be non-zero."),
+            };
+        }
+
+        /// <summary>
+        /// Gets the local dimensions as an array of UIntPtr for OpenCL calls.
+        /// </summary> <returns>Array containing the non-zero local dimensions</returns>
+        public UIntPtr[] LocalSizeToArray()
+        {
+            return LocalDimensionCount switch
+            {
+                1 => [LocalX],
+                2 => [LocalX, LocalY],
+                3 => [LocalX, LocalY, LocalZ],
+                _ => throw new InvalidOperationException("At least LocalX dimension must be non-zero."),
             };
         }
 

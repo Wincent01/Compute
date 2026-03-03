@@ -115,7 +115,8 @@ public static class GemmExample
 
         var workers = new WorkerDimensions((uint)N, (uint)M)
         {
-            LocalSize = [(uint)TILE, (uint)TILE]
+            LocalX = (uint)tile,
+            LocalY = (uint)tile
         };
 
         using var parallel = Parallel.Prepare(context, () =>
@@ -185,7 +186,8 @@ public static class GemmExample
 
         var workers = new WorkerDimensions((uint)N, (uint)M)
         {
-            LocalSize = [(uint)TILE, (uint)TILE]
+            LocalX = (uint)TILE,
+            LocalY = (uint)TILE
         };
 
         kernel(workers, sharedA, sharedB, sharedC, (nuint)M, (nuint)N, (nuint)K);

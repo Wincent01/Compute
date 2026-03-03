@@ -267,9 +267,9 @@ namespace Compute
             var dimensions = workers.DimensionCount;
             var globalWork = workers.ToArray();
 
-            if (workers.LocalSize != null)
+            if (workers.HasLocalSize)
             {
-                var localWork = Array.ConvertAll(workers.LocalSize, s => (UIntPtr)s);
+                var localWork = workers.LocalSizeToArray();
 
                 fixed (UIntPtr* globalPtr = globalWork)
                 fixed (UIntPtr* localPtr = localWork)
