@@ -82,8 +82,6 @@ namespace Compute.IL.AST
             // Compile the method using AST
             var kernelSource = CompileToAst(method);
 
-            // Apply local memory transform (converts LocalMemory.Allocate to __local declarations)
-            var localMemTransform = new LocalMemoryTransform();
             var transformContext = new AstTransformContext
             {
                 Method = method,
@@ -91,7 +89,9 @@ namespace Compute.IL.AST
                 ClosureType = null,
                 CodeGenerator = CodeGenerator
             };
-            kernelSource.Body = localMemTransform.Transform(kernelSource.Body, transformContext);
+
+            var pipeline = AstTransformPipeline.CreateDefault();
+            kernelSource.Body = pipeline.Run(kernelSource.Body, transformContext);
 
             code = GenerateCompleteSource();
 
@@ -270,8 +270,14 @@ namespace Compute.IL.AST
                     continue; // Skip alias methods
                 }
 
-                // Skip LocalMemory.Allocate — it's a compile-time marker, not a real function
-                if (methodBase.DeclaringType?.Name == "LocalMemory" && methodBase.Name == "Allocate")
+                // Skip LocalMemory marker methods — they are compile-time markers, not real functions
+                if (methodBase.DeclaringType?.Name == "LocalMemory")
+                {
+                    continue;
+                }
+
+                // Skip LocalArray helper methods — indexer get/set calls are lowered by transforms.
+                if (methodBase.DeclaringType?.Name is "LocalArray2D`1" or "LocalArray3D`1")
                 {
                     continue;
                 }

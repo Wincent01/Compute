@@ -17,12 +17,18 @@ namespace Compute.IL.Utility
         public static Type? Find(string name)
         {
             var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            var alternateName = name.Contains('/') ? name.Replace('/', '+') : null;
 
             foreach (var assembly in assemblies)
             {
                 if (assembly == default) continue;
 
                 var type = assembly.GetType(name);
+
+                if (type == null && alternateName != null)
+                {
+                    type = assembly.GetType(alternateName);
+                }
 
                 if (type == default) continue;
 

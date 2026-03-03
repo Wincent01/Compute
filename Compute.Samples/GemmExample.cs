@@ -32,13 +32,13 @@ public static class GemmExample
         int N,
         int K)
     {
-        var tileA = LocalMemory.Allocate<float>(TILE * TILE);
-        var tileB = LocalMemory.Allocate<float>(TILE * TILE);
+        var tileA = LocalMemory.Allocate2D<float>(TILE, TILE);
+        var tileB = LocalMemory.Allocate2D<float>(TILE, TILE);
 
-        int row = BuiltIn.GetLocalId(1);
-        int col = BuiltIn.GetLocalId(0);
-        int globalRow = BuiltIn.GetGroupId(1) * TILE + row;
-        int globalCol = BuiltIn.GetGroupId(0) * TILE + col;
+        int row = KernelThread.Local.Y;
+        int col = KernelThread.Local.X;
+        int globalRow = KernelThread.Group.Y * TILE + row;
+        int globalCol = KernelThread.Group.X * TILE + col;
 
         float sum = 0.0f;
 
@@ -46,18 +46,18 @@ public static class GemmExample
         for (int t = 0; t < numTiles; t++)
         {
             // Load one tile of A and B into local memory
-            tileA[row * TILE + col] = A[globalRow * K + t * TILE + col];
-            tileB[row * TILE + col] = B[(t * TILE + row) * N + globalCol];
+            tileA[row, col] = A[globalRow * K + t * TILE + col];
+            tileB[row, col] = B[(t * TILE + row) * N + globalCol];
 
-            BuiltIn.Barrier(1); // CLK_LOCAL_MEM_FENCE
+            Sync.Local(); // CLK_LOCAL_MEM_FENCE
 
             // Compute partial dot product for this tile
             for (int k = 0; k < TILE; k++)
             {
-                sum += tileA[row * TILE + k] * tileB[k * TILE + col];
+                sum += tileA[row, k] * tileB[k, col];
             }
 
-            BuiltIn.Barrier(1); // CLK_LOCAL_MEM_FENCE
+            Sync.Local(); // CLK_LOCAL_MEM_FENCE
         }
 
         C[globalRow * N + globalCol] = sum;
@@ -113,38 +113,34 @@ public static class GemmExample
         var sw = Stopwatch.StartNew();
         int tile = TILE;
 
-        var workers = new WorkerDimensions((uint)N, (uint)M)
-        {
-            LocalX = (uint)tile,
-            LocalY = (uint)tile
-        };
+        var workers = Grid.Size(N, M).Tile((uint)tile, (uint)tile);
 
         using var parallel = Parallel.Prepare(context, () =>
         {
-            var tileA = LocalMemory.Allocate<float>(TILE * TILE);
-            var tileB = LocalMemory.Allocate<float>(TILE * TILE);
+            var tileA = LocalMemory.Allocate2D<float>(TILE, TILE);
+            var tileB = LocalMemory.Allocate2D<float>(TILE, TILE);
 
-            int row = BuiltIn.GetLocalId(1);
-            int col = BuiltIn.GetLocalId(0);
-            int globalRow = BuiltIn.GetGroupId(1) * tile + row;
-            int globalCol = BuiltIn.GetGroupId(0) * tile + col;
+            int row = KernelThread.Local.Y;
+            int col = KernelThread.Local.X;
+            int globalRow = KernelThread.Group.Y * tile + row;
+            int globalCol = KernelThread.Group.X * tile + col;
 
             float sum = 0.0f;
 
             int numTiles = K / tile;
             for (int t = 0; t < numTiles; t++)
             {
-                tileA[row * tile + col] = A[globalRow * K + t * tile + col];
-                tileB[row * tile + col] = B[(t * tile + row) * N + globalCol];
+                tileA[row, col] = A[globalRow * K + t * tile + col];
+                tileB[row, col] = B[(t * tile + row) * N + globalCol];
 
-                BuiltIn.Barrier(1);
+                Sync.Local();
 
                 for (int k = 0; k < tile; k++)
                 {
-                    sum += tileA[row * tile + k] * tileB[k * tile + col];
+                    sum += tileA[row, k] * tileB[k, col];
                 }
 
-                BuiltIn.Barrier(1);
+                Sync.Local();
             }
 
             C[globalRow * N + globalCol] = sum;
@@ -184,11 +180,7 @@ public static class GemmExample
         sharedA.CopyToDevice(A);
         sharedB.CopyToDevice(B);
 
-        var workers = new WorkerDimensions((uint)N, (uint)M)
-        {
-            LocalX = (uint)TILE,
-            LocalY = (uint)TILE
-        };
+        var workers = Grid.Size(N, M).Tile((uint)TILE, (uint)TILE);
 
         kernel(workers, sharedA, sharedB, sharedC, (nuint)M, (nuint)N, (nuint)K);
 

@@ -34,5 +34,77 @@ namespace Compute.IL
             // If somehow called on the CPU, return a regular array as a fallback.
             return new T[size];
         }
+
+        /// <summary>
+        /// Declares a 2D __local (shared) memory region backed by a flat array.
+        /// The generated OpenCL declaration is equivalent to <c>__local T name[width * height]</c>.
+        /// </summary>
+        public static T[] Allocate<T>(int width, int height) where T : unmanaged
+        {
+            return new T[width * height];
+        }
+
+        /// <summary>
+        /// Declares a 2D __local (shared) memory region and exposes 2D indexing semantics.
+        /// </summary>
+        public static LocalArray2D<T> Allocate2D<T>(int width, int height) where T : unmanaged
+        {
+            return new LocalArray2D<T>(new T[width * height], width, height);
+        }
+
+        /// <summary>
+        /// Declares a 3D __local (shared) memory region and exposes 3D indexing semantics.
+        /// </summary>
+        public static LocalArray3D<T> Allocate3D<T>(int width, int height, int depth) where T : unmanaged
+        {
+            return new LocalArray3D<T>(new T[width * height * depth], width, height, depth);
+        }
+    }
+
+    public struct LocalArray2D<T> where T : unmanaged
+    {
+        private readonly T[] _buffer;
+
+        public int Width { get; }
+
+        public int Height { get; }
+
+        internal LocalArray2D(T[] buffer, int width, int height)
+        {
+            _buffer = buffer;
+            Width = width;
+            Height = height;
+        }
+
+        public T this[int y, int x]
+        {
+            get => _buffer[y * Width + x];
+            set => _buffer[y * Width + x] = value;
+        }
+    }
+
+    public struct LocalArray3D<T> where T : unmanaged
+    {
+        private readonly T[] _buffer;
+
+        public int Width { get; }
+
+        public int Height { get; }
+
+        public int Depth { get; }
+
+        internal LocalArray3D(T[] buffer, int width, int height, int depth)
+        {
+            _buffer = buffer;
+            Width = width;
+            Height = height;
+            Depth = depth;
+        }
+
+        public T this[int z, int y, int x]
+        {
+            get => _buffer[(z * Height + y) * Width + x];
+            set => _buffer[(z * Height + y) * Width + x] = value;
+        }
     }
 }

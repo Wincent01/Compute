@@ -40,6 +40,7 @@ namespace Compute.IL.AST.Transforms
         {
             var pipeline = new AstTransformPipeline();
             pipeline.Add(new ClosureInliningTransform());
+            pipeline.Add(new ErgonomicBuiltInTransform());
             pipeline.Add(new LocalMemoryTransform());
             return pipeline;
         }

@@ -18,6 +18,10 @@ namespace Compute.IL.AST.Instructions
             var methodRef = (MethodReference)Instruction.Operand;
 
             var declearingType = TypeHelper.Find(methodRef.DeclaringType.FullName);
+            declearingType ??= TypeHelper.Find(methodRef.DeclaringType.FullName.Replace('/', '+'));
+            declearingType ??= methodRef.DeclaringType.Resolve() is { } resolvedDeclaringType
+                ? TypeHelper.Find(resolvedDeclaringType)
+                : null;
             if (declearingType == null)
             {
                 throw new InvalidOperationException($"Unable to resolve type for method {methodRef.FullName}");
@@ -32,9 +36,16 @@ namespace Compute.IL.AST.Instructions
                 arguments[i] = ExpressionStack.Pop();
             }
 
+            IExpression? instance = null;
+
+            if (methodRef.HasThis)
+            {
+                instance = ExpressionStack.Pop();
+            }
+
             if (methodRef.HasThis && (methodRef.Name.StartsWith("get_") || methodRef.Name.StartsWith("set_")))
             {
-                var obj = ExpressionStack.Pop();
+                var obj = instance ?? throw new InvalidOperationException($"Expected instance for property call {methodRef.FullName}");
 
                 var property = declearingType.GetProperty(methodRef.Name.Substring(4), System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Static);
 
@@ -49,17 +60,15 @@ namespace Compute.IL.AST.Instructions
                     if (methodRef.Name.StartsWith("get_"))
                     {
                         // It's a property getter
-                        var instance = obj;
-                        var propertyAccess = new FieldAccessExpression(instance, aliasName, AstType.FromClrType(property.PropertyType));
+                        var propertyAccess = new FieldAccessExpression(obj, aliasName, AstType.FromClrType(property.PropertyType));
                         ExpressionStack.Push(propertyAccess);
                         return new NopStatement();
                     }
                     else if (methodRef.Name.StartsWith("set_"))
                     {
                         // It's a property setter
-                        var instance = obj;
                         var value = arguments.Length > 0 ? arguments[0] : throw new InvalidOperationException("Setter method has no arguments");
-                        var propertyAccess = new FieldAccessExpression(instance, aliasName, AstType.FromClrType(property.PropertyType));
+                        var propertyAccess = new FieldAccessExpression(obj, aliasName, AstType.FromClrType(property.PropertyType));
                         var assignment = new AssignmentStatement(propertyAccess, value);
                         return assignment;
                     }
@@ -75,16 +84,26 @@ namespace Compute.IL.AST.Instructions
 
             var parameters = method.GetParameters();
 
+            if (methodRef.HasThis)
+            {
+                var withInstance = new IExpression[arguments.Length + 1];
+                withInstance[0] = instance ?? throw new InvalidOperationException($"Expected instance for call {methodRef.FullName}");
+                Array.Copy(arguments, 0, withInstance, 1, arguments.Length);
+                arguments = withInstance;
+            }
+
+            var argumentOffset = methodRef.HasThis ? 1 : 0;
+
             for (int i = 0; i < parameters.Length; i++)
             {
                 var attributes = parameters[i].GetCustomAttributes(typeof(ByValueAttribute), false);
 
                 if (attributes.Length == 0)
                 {
-                    if (arguments[i].Type.IsStruct && !arguments[i].Type.IsPrimitive)
+                    if (arguments[i + argumentOffset].Type.IsStruct && !arguments[i + argumentOffset].Type.IsPrimitive)
                     {
                         // If the parameter is not marked with [ByValue] and is a struct, we need to pass a pointer
-                        arguments[i] = new AddressOfExpression(arguments[i], new PointerAstType(arguments[i].Type));
+                        arguments[i + argumentOffset] = new AddressOfExpression(arguments[i + argumentOffset], new PointerAstType(arguments[i + argumentOffset].Type));
                     }
                 }
             }
@@ -157,6 +176,28 @@ namespace Compute.IL.AST.Instructions
         /// </summary>
         private static Type? ResolveTypeReference(TypeReference typeRef, MethodReference methodRef)
         {
+            if (typeRef is GenericInstanceType git)
+            {
+                var openGeneric = TypeHelper.Find(git.ElementType.FullName) ??
+                                  TypeHelper.Find(git.ElementType.FullName.Replace('/', '+'));
+
+                if (openGeneric != null && openGeneric.IsGenericTypeDefinition)
+                {
+                    var genericArgs = new Type[git.GenericArguments.Count];
+                    for (var i = 0; i < git.GenericArguments.Count; i++)
+                    {
+                        var resolvedArg = ResolveTypeReference(git.GenericArguments[i], methodRef);
+                        if (resolvedArg == null)
+                            return null;
+                        genericArgs[i] = resolvedArg;
+                    }
+
+                    return openGeneric.MakeGenericType(genericArgs);
+                }
+
+                return openGeneric;
+            }
+
             if (typeRef is GenericParameter gp && methodRef is GenericInstanceMethod gim)
             {
                 // Resolve the generic parameter to the concrete type argument
@@ -168,7 +209,7 @@ namespace Compute.IL.AST.Instructions
             }
 
             // Try direct lookup
-            return TypeHelper.Find(typeRef.FullName);
+            return TypeHelper.Find(typeRef.FullName) ?? TypeHelper.Find(typeRef.FullName.Replace('/', '+'));
         }
     }
 }
